@@ -6,13 +6,16 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Bell,
+  Calendar,
   CalendarDays,
   ChevronDown,
   CircleDollarSign,
   Clock3,
   Coffee,
   CreditCard,
+  Download,
   LayoutDashboard,
+  Mail,
   Menu,
   MoreHorizontal,
   Package,
@@ -30,6 +33,10 @@ import {
   ClipboardList,
   Truck,
   UserCog,
+  UserPlus,
+  Trash2,
+  Edit,
+  Eye,
 } from 'lucide-react'
 
 type Category = { name: string }
