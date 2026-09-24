@@ -1,0 +1,5 @@
+#add all gitignore files
+node modules
+.env
+.next
+node_modules
