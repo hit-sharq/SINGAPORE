@@ -1,0 +1,2002 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  CASHIER
+  BARTENDER
+  WAITER
+  INVENTORY_MANAGER
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum OrderStatus {
+  OPEN
+  PAID
+  VOID
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  PESAPAL
+  CASH
+  CARD
+}
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  CLEANING
+}
+
+enum NotificationType {
+  ORDER
+  PAYMENT
+  INVENTORY
+  SYSTEM
+}
+
+model StaffProfile {
+  id          String   @id @default(cuid())
+  clerkUserId String   @unique
+  name        String
+  email       String   @unique
+  role        Role     @default(CASHIER)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  orders      Order[]  @relation("createdBy")
+  approved    RoleGrant[] @relation("approvedBy")
+  grants      RoleGrant[] @relation("grantedTo")
+  auditLogs   AuditLog[]
+  notifications Notification[]
+}
+
+model RoleGrant {
+  id             String @id @default(cuid())
+  userId         String
+  role           Role
+  approvedById   String
+  active         Boolean @default(true)
+  createdAt      DateTime @default(now())
+  user           StaffProfile @relation("grantedTo", fields: [userId], references: [id])
+  approvedBy     StaffProfile @relation("approvedBy", fields: [approvedById], references: [id])
+  @@unique([userId, role])
+}
+
+model Category {
+  id          String @id @default(cuid())
+  name        String @unique
+  products    Product[]
+  createdAt   DateTime @default(now())
+}
+
+model Product {
+  id          String @id @default(cuid())
+  name        String
+  sku         String @unique
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id])
+  price       Decimal @db.Decimal(12, 2)
+  costPrice   Decimal @db.Decimal(12, 2)
+  stock       Decimal @default(0) @db.Decimal(12, 3)
+  reorderAt   Decimal @default(0) @db.Decimal(12, 3)
+  status      ProductStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  orderItems  OrderItem[]
+  stockMoves  StockMovement[]
+  @@index([categoryId, status])
+}
+
+model VenueTable {
+  id        String @id @default(cuid())
+  name      String @unique
+  status    TableStatus @default(AVAILABLE)
+  capacity  Int @default(4)
+  orders    Order[]
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id          String @id @default(cuid())
+  number      Int @unique @default(autoincrement())
+  status      OrderStatus @default(OPEN)
+  total       Decimal @default(0) @db.Decimal(12, 2)
+  tableId     String?
+  table       VenueTable? @relation(fields: [tableId], references: [id])
+  createdById String
+  createdBy   StaffProfile @relation("createdBy", fields: [createdById], references: [id])
+  items       OrderItem[]
+  payments    Payment[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([status, createdAt])
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Decimal @db.Decimal(12, 3)
+  unitPrice Decimal @db.Decimal(12, 2)
+  subtotal  Decimal @db.Decimal(12, 2)
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Payment {
+  id              String @id @default(cuid())
+  orderId         String
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  amount          Decimal @db.Decimal(12, 2)
+  currency        String @default("KES")
+  pesapalOrderId  String? @unique
+  merchantRef     String? @unique
+  confirmationRef String?
+  rawResponse     Json?
+  order           Order @relation(fields: [orderId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([status, createdAt])
+}
+
+model StockMovement {
+  id        String @id @default(cuid())
+  productId String
+  quantity  Decimal @db.Decimal(12, 3)
+  reason    String
+  reference String?
+  product   Product @relation(fields: [productId], references: [id])
+  createdAt DateTime @default(now())
+  @@index([productId, createdAt])
+}
+
+model Notification {
+  id        String @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  readAt    DateTime?
+  user      StaffProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@index([userId, readAt, createdAt])
+}
+
+model AuditLog {
+  id        String @id @default(cuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  user      StaffProfile @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  @@index([entity, entityId, createdAt])
+}
+
+model AppSetting {
+  key       String @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model PesapalTransaction {
+  id              String @id @default(cuid())
+  orderId         String
+  merchantRef     String @unique
+  pesapalOrderId  String? @unique
+  status          PaymentStatus @default(PENDING)
+  amount          Decimal @db.Decimal(12, 2)
+  currency        String @default("KES")
+  callbackPayload Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([status, createdAt])
+}
+
+model Customer {
+  id        String @id @default(cuid())
+  name      String
+  phone     String? @unique
+  email     String? @unique
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Reservation {
+  id        String @id @default(cuid())
+  customerId String?
+  tableId   String
+  startsAt  DateTime
+  endsAt    DateTime
+  status    String @default("CONFIRMED")
+  createdAt DateTime @default(now())
+  @@index([tableId, startsAt, endsAt])
+}
+
+model Expense {
+  id          String @id @default(cuid())
+  description String
+  amount      Decimal @db.Decimal(12, 2)
+  category    String
+  createdById String
+  createdAt   DateTime @default(now())
+  @@index([createdAt])
+}
+
+model DailySummary {
+  id            String @id @default(cuid())
+  day           DateTime @unique
+  revenue       Decimal @default(0) @db.Decimal(12, 2)
+  orderCount    Int @default(0)
+  pesapalTotal  Decimal @default(0) @db.Decimal(12, 2)
+  cashTotal     Decimal @default(0) @db.Decimal(12, 2)
+  cardTotal     Decimal @default(0) @db.Decimal(12, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model WebhookEvent {
+  id          String @id @default(cuid())
+  provider    String
+  externalId  String @unique
+  payload     Json
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model IdempotencyKey {
+  key       String @id
+  response  Json?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+model AppConfig {
+  id              String @id @default(cuid())
+  initialAdminId  String @unique
+  venueName       String @default("Singapore Club")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model CustomerOrder {
+  id         String @id @default(cuid())
+  customerId String
+  orderId    String @unique
+}
+
+model ProductPriceHistory {
+  id        String @id @default(cuid())
+  productId String
+  price     Decimal @db.Decimal(12, 2)
+  changedBy String
+  createdAt DateTime @default(now())
+}
+
+model Shift {
+  id        String @id @default(cuid())
+  userId    String
+  startsAt  DateTime
+  endsAt    DateTime?
+  status    String @default("OPEN")
+  openingCash Decimal @default(0) @db.Decimal(12, 2)
+  closingCash Decimal?
+  createdAt DateTime @default(now())
+}
+
+model CashDrawer {
+  id        String @id @default(cuid())
+  shiftId   String @unique
+  balance   Decimal @default(0) @db.Decimal(12, 2)
+  updatedAt DateTime @updatedAt
+}
+
+model InventoryCount {
+  id        String @id @default(cuid())
+  productId String
+  countedBy String
+  expected  Decimal @db.Decimal(12, 3)
+  counted   Decimal @db.Decimal(12, 3)
+  createdAt DateTime @default(now())
+}
+
+model Announcement {
+  id        String @id @default(cuid())
+  title     String
+  message   String
+  createdBy String
+  publishedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model ReportExport {
+  id        String @id @default(cuid())
+  userId    String
+  type      String
+  status    String @default("PENDING")
+  createdAt DateTime @default(now())
+}
+
+model LoginEvent {
+  id        String @id @default(cuid())
+  clerkUserId String
+  success   Boolean
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+model SystemHealth {
+  id        String @id @default(cuid())
+  service   String @unique
+  status    String
+  checkedAt DateTime @updatedAt
+}
+
+model TaxRule {
+  id        String @id @default(cuid())
+  name      String @unique
+  rate      Decimal @db.Decimal(5, 2)
+  active    Boolean @default(true)
+}
+
+model DiscountRule {
+  id        String @id @default(cuid())
+  name      String @unique
+  percentage Decimal @db.Decimal(5, 2)
+  active    Boolean @default(true)
+}
+
+model OrderDiscount {
+  id        String @id @default(cuid())
+  orderId   String
+  ruleId    String
+  amount    Decimal @db.Decimal(12, 2)
+}
+
+model OrderTax {
+  id        String @id @default(cuid())
+  orderId   String
+  ruleId    String
+  amount    Decimal @db.Decimal(12, 2)
+}
+
+model PrinterConfig {
+  id        String @id @default(cuid())
+  name      String
+  endpoint  String
+  active    Boolean @default(true)
+}
+
+model IntegrationEvent {
+  id        String @id @default(cuid())
+  provider  String
+  eventType String
+  status    String
+  payload   Json?
+  createdAt DateTime @default(now())
+}
+
+model ApiKey {
+  id        String @id @default(cuid())
+  name      String
+  hash      String @unique
+  lastUsedAt DateTime?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  description String
+  roleGrants  RolePermission[]
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  role         Role
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  @@unique([role, permissionId])
+}
+
+model FeatureFlag {
+  key       String @id
+  enabled   Boolean @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+model DataRetention {
+  id        String @id @default(cuid())
+  entity    String @unique
+  days      Int
+  enabled   Boolean @default(true)
+}
+
+model SupportTicket {
+  id        String @id @default(cuid())
+  createdBy String
+  subject   String
+  message   String
+  status    String @default("OPEN")
+  createdAt DateTime @default(now())
+}
+
+model Attachment {
+  id        String @id @default(cuid())
+  entity    String
+  entityId  String
+  url       String
+  name      String
+  createdAt DateTime @default(now())
+}
+
+model SyncCursor {
+  provider  String @id
+  cursor    String?
+  updatedAt DateTime @updatedAt
+}
+
+model EmailEvent {
+  id        String @id @default(cuid())
+  recipient String
+  type      String
+  status    String
+  createdAt DateTime @default(now())
+}
+
+model HealthCheck {
+  id        String @id @default(cuid())
+  name      String @unique
+  lastRunAt DateTime?
+  status    String
+  details   Json?
+}
+
+model AppSession {
+  id        String @id @default(cuid())
+  clerkUserId String
+  lastSeenAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model LoginPolicy {
+  id        String @id @default(cuid())
+  requireEmailVerification Boolean @default(false)
+  maxAttempts Int @default(5)
+}
+
+model Venue {
+  id        String @id @default(cuid())
+  name      String @unique
+  timezone  String @default("Africa/Nairobi")
+  currency  String @default("KES")
+}
+
+model BusinessDay {
+  id        String @id @default(cuid())
+  date      DateTime @unique
+  openedAt  DateTime?
+  closedAt  DateTime?
+  closedBy  String?
+}
+
+model Reconciliation {
+  id        String @id @default(cuid())
+  paymentId String
+  expected  Decimal @db.Decimal(12, 2)
+  received  Decimal @db.Decimal(12, 2)
+  status    String
+  createdAt DateTime @default(now())
+}
+
+model NotificationPreference {
+  id        String @id @default(cuid())
+  userId    String @unique
+  orderAlerts Boolean @default(true)
+  paymentAlerts Boolean @default(true)
+  inventoryAlerts Boolean @default(true)
+}
+
+model ApprovalRequest {
+  id        String @id @default(cuid())
+  requestedBy String
+  approvedBy String?
+  type      String
+  status    String @default("PENDING")
+  payload   Json?
+  createdAt DateTime @default(now())
+  decidedAt DateTime?
+}
+
+model ExternalReference {
+  id         String @id @default(cuid())
+  entity     String
+  entityId   String
+  provider   String
+  externalId String
+  @@unique([provider, externalId])
+}
+
+model OutboxEvent {
+  id          String @id @default(cuid())
+  type        String
+  payload     Json
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model ReportSnapshot {
+  id        String @id @default(cuid())
+  name      String
+  periodStart DateTime
+  periodEnd DateTime
+  data      Json
+  createdAt DateTime @default(now())
+}
+
+model RateLimitEvent {
+  id        String @id @default(cuid())
+  key       String
+  action    String
+  createdAt DateTime @default(now())
+  @@index([key, createdAt])
+}
+
+model DataImport {
+  id        String @id @default(cuid())
+  type      String
+  status    String @default("PENDING")
+  createdBy String
+  error     String?
+  createdAt DateTime @default(now())
+}
+
+model DataExport {
+  id        String @id @default(cuid())
+  type      String
+  status    String @default("PENDING")
+  requestedBy String
+  createdAt DateTime @default(now())
+}
+
+model WebhookDelivery {
+  id        String @id @default(cuid())
+  provider  String
+  eventId   String
+  status    String
+  attempts  Int @default(0)
+  deliveredAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([provider, eventId])
+}
+
+model AuditRetentionPolicy {
+  id        String @id @default(cuid())
+  days      Int @default(365)
+  updatedAt DateTime @updatedAt
+}
+
+model CurrencyRate {
+  id        String @id @default(cuid())
+  base      String
+  quote     String
+  rate      Decimal @db.Decimal(18, 8)
+  asOf      DateTime
+  @@unique([base, quote])
+}
+
+model Receipt {
+  id        String @id @default(cuid())
+  orderId   String @unique
+  number    String @unique
+  issuedAt  DateTime @default(now())
+  url       String?
+}
+
+model ProductImage {
+  id        String @id @default(cuid())
+  productId String
+  url       String
+  alt       String?
+  sortOrder Int @default(0)
+}
+
+model CustomerNote {
+  id         String @id @default(cuid())
+  customerId String
+  note       String
+  createdBy  String
+  createdAt  DateTime @default(now())
+}
+
+model StaffInvite {
+  id         String @id @default(cuid())
+  email      String
+  role       Role
+  invitedBy  String
+  tokenHash  String @unique
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime @default(now())
+}
+
+model RoleChange {
+  id        String @id @default(cuid())
+  userId    String
+  fromRole  Role?
+  toRole    Role
+  changedBy String
+  createdAt DateTime @default(now())
+}
+
+model DashboardWidget {
+  id        String @id @default(cuid())
+  userId    String
+  widgetKey String
+  position  Int
+  enabled   Boolean @default(true)
+  @@unique([userId, widgetKey])
+}
+
+model SavedFilter {
+  id        String @id @default(cuid())
+  userId    String
+  name      String
+  resource  String
+  definition Json
+  createdAt DateTime @default(now())
+}
+
+model SystemNotice {
+  id        String @id @default(cuid())
+  severity  String
+  message   String
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+}
+
+model SyncFailure {
+  id        String @id @default(cuid())
+  provider  String
+  message   String
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model OnboardingState {
+  id        String @id @default(cuid())
+  clerkUserId String @unique
+  completed Boolean @default(false)
+  completedAt DateTime?
+}
+
+model AppVersion {
+  id        String @id @default(cuid())
+  version   String @unique
+  releasedAt DateTime @default(now())
+}
+
+model JobRun {
+  id        String @id @default(cuid())
+  job       String
+  status    String
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  error     String?
+}
+
+model ApiRequestLog {
+  id         String @id @default(cuid())
+  method     String
+  path       String
+  statusCode Int
+  clerkUserId String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+  @@index([path, createdAt])
+}
+
+model BackupRecord {
+  id        String @id @default(cuid())
+  provider  String
+  status    String
+  location  String?
+  createdAt DateTime @default(now())
+}
+
+model ConsentRecord {
+  id        String @id @default(cuid())
+  clerkUserId String
+  consentType String
+  version   String
+  grantedAt DateTime @default(now())
+}
+
+model LegalDocument {
+  id        String @id @default(cuid())
+  type      String
+  version   String
+  contentUrl String
+  publishedAt DateTime @default(now())
+  @@unique([type, version])
+}
+
+model Team {
+  id        String @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+}
+
+model TeamMember {
+  id        String @id @default(cuid())
+  teamId    String
+  clerkUserId String
+  role      Role
+  @@unique([teamId, clerkUserId])
+}
+
+model ApiHealthMetric {
+  id        String @id @default(cuid())
+  service   String
+  latencyMs Int
+  success   Boolean
+  createdAt DateTime @default(now())
+}
+
+model DataCorrection {
+  id        String @id @default(cuid())
+  entity    String
+  entityId  String
+  reason    String
+  correctedBy String
+  createdAt DateTime @default(now())
+}
+
+model QueueMessage {
+  id        String @id @default(cuid())
+  topic     String
+  payload   Json
+  status    String @default("PENDING")
+  attempts  Int @default(0)
+  createdAt DateTime @default(now())
+}
+
+model SearchIndexState {
+  id        String @id @default(cuid())
+  resource  String @unique
+  version   Int @default(1)
+  updatedAt DateTime @updatedAt
+}
+
+model DataVersion {
+  id        String @id @default(cuid())
+  entity    String
+  entityId  String
+  version   Int
+  snapshot  Json
+  createdAt DateTime @default(now())
+  @@unique([entity, entityId, version])
+}
+
+model FeatureUsage {
+  id        String @id @default(cuid())
+  feature   String
+  clerkUserId String?
+  createdAt DateTime @default(now())
+}
+
+model SessionDevice {
+  id        String @id @default(cuid())
+  clerkUserId String
+  fingerprint String
+  lastSeenAt DateTime @updatedAt
+  @@unique([clerkUserId, fingerprint])
+}
+
+model EmailVerification {
+  id        String @id @default(cuid())
+  clerkUserId String
+  verifiedAt DateTime?
+}
+
+model PasswordResetAudit {
+  id        String @id @default(cuid())
+  clerkUserId String?
+  requestedAt DateTime @default(now())
+  completedAt DateTime?
+}
+
+model AdminBootstrap {
+  id        String @id @default(cuid())
+  clerkUserId String @unique
+  configuredAt DateTime @default(now())
+  configuredBy String?
+}
+
+model RolePermissionOverride {
+  id        String @id @default(cuid())
+  userId    String
+  permissionId String
+  allowed   Boolean
+  @@unique([userId, permissionId])
+}
+
+model DataAccessLog {
+  id        String @id @default(cuid())
+  clerkUserId String?
+  resource  String
+  action    String
+  createdAt DateTime @default(now())
+}
+
+model IntegrationCredential {
+  id        String @id @default(cuid())
+  provider  String @unique
+  configured Boolean @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+model MigrationRecord {
+  id        String @id @default(cuid())
+  name      String @unique
+  appliedAt DateTime @default(now())
+}
+
+model ReleaseNote {
+  id        String @id @default(cuid())
+  version   String
+  note      String
+  createdAt DateTime @default(now())
+}
+
+model MaintenanceWindow {
+  id        String @id @default(cuid())
+  startsAt  DateTime
+  endsAt    DateTime
+  message   String
+  active    Boolean @default(true)
+}
+
+model StoreCredit {
+  id        String @id @default(cuid())
+  customerId String
+  amount    Decimal @db.Decimal(12, 2)
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model LoyaltyEvent {
+  id        String @id @default(cuid())
+  customerId String
+  points    Int
+  reason    String
+  createdAt DateTime @default(now())
+}
+
+model ProductBundle {
+  id        String @id @default(cuid())
+  name      String
+  price     Decimal @db.Decimal(12, 2)
+  active    Boolean @default(true)
+}
+
+model BundleItem {
+  id        String @id @default(cuid())
+  bundleId  String
+  productId String
+  quantity  Decimal @db.Decimal(12, 3)
+}
+
+model StockAlert {
+  id        String @id @default(cuid())
+  productId String
+  threshold Decimal @db.Decimal(12, 3)
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model PaymentReversal {
+  id        String @id @default(cuid())
+  paymentId String
+  amount    Decimal @db.Decimal(12, 2)
+  reason    String
+  createdAt DateTime @default(now())
+}
+
+model PaymentAttempt {
+  id        String @id @default(cuid())
+  paymentId String
+  attemptNo Int
+  status    String
+  response  Json?
+  createdAt DateTime @default(now())
+  @@unique([paymentId, attemptNo])
+}
+
+model WebhookSecret {
+  id        String @id @default(cuid())
+  provider  String @unique
+  secretHash String
+  rotatedAt DateTime @default(now())
+}
+
+model NotificationDelivery {
+  id        String @id @default(cuid())
+  notificationId String
+  channel   String
+  status    String
+  deliveredAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model UserPresence {
+  id        String @id @default(cuid())
+  clerkUserId String @unique
+  lastSeenAt DateTime @updatedAt
+  status    String @default("ONLINE")
+}
+
+model ScheduledReport {
+  id        String @id @default(cuid())
+  name      String
+  schedule  String
+  recipients Json
+  active    Boolean @default(true)
+}
+
+model ReportDelivery {
+  id        String @id @default(cuid())
+  reportId  String
+  status    String
+  deliveredAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model SearchQueryLog {
+  id        String @id @default(cuid())
+  clerkUserId String?
+  query     String
+  resource  String
+  createdAt DateTime @default(now())
+}
+
+model ImportRowError {
+  id        String @id @default(cuid())
+  importId  String
+  rowNumber Int
+  message   String
+}
+
+model ExportRow {
+  id        String @id @default(cuid())
+  exportId  String
+  rowNumber Int
+  payload   Json
+}
+
+model DocumentSequence {
+  name      String @id
+  nextValue Int @default(1)
+}
+
+model NumberSequence {
+  name      String @id
+  nextValue Int @default(1)
+}
+
+model UserPreference {
+  id        String @id @default(cuid())
+  clerkUserId String @unique
+  timezone  String @default("Africa/Nairobi")
+  currency  String @default("KES")
+  locale    String @default("en-KE")
+}
+
+model SecurityEvent {
+  id        String @id @default(cuid())
+  clerkUserId String?
+  type      String
+  details   Json?
+  createdAt DateTime @default(now())
+}
+
+model IntegrationHealth {
+  id        String @id @default(cuid())
+  provider  String @unique
+  status    String
+  checkedAt DateTime @updatedAt
+  details   Json?
+}
+
+model PaymentReceipt {
+  id        String @id @default(cuid())
+  paymentId String @unique
+  receiptUrl String?
+  emailedAt DateTime?
+}
+
+model MobileMoneyAccount {
+  id        String @id @default(cuid())
+  provider  String
+  accountName String
+  accountNumber String
+  active    Boolean @default(true)
+}
+
+model ReorderRequest {
+  id        String @id @default(cuid())
+  productId String
+  quantity  Decimal @db.Decimal(12, 3)
+  status    String @default("PENDING")
+  requestedBy String
+  approvedBy String?
+  createdAt DateTime @default(now())
+}
+
+model Supplier {
+  id        String @id @default(cuid())
+  name      String @unique
+  phone     String?
+  email     String?
+  active    Boolean @default(true)
+}
+
+model PurchaseOrder {
+  id        String @id @default(cuid())
+  supplierId String
+  status    String @default("DRAFT")
+  total     Decimal @default(0) @db.Decimal(12, 2)
+  createdBy String
+  createdAt DateTime @default(now())
+}
+
+model PurchaseOrderItem {
+  id        String @id @default(cuid())
+  purchaseOrderId String
+  productId String
+  quantity  Decimal @db.Decimal(12, 3)
+  unitCost  Decimal @db.Decimal(12, 2)
+}
+
+model TableSession {
+  id        String @id @default(cuid())
+  tableId   String
+  openedBy  String
+  openedAt  DateTime @default(now())
+  closedAt  DateTime?
+  status    String @default("OPEN")
+}
+
+model ShiftHandover {
+  id        String @id @default(cuid())
+  fromUser  String
+  toUser    String
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+model AccessRequest {
+  id        String @id @default(cuid())
+  clerkUserId String
+  requestedRole Role
+  status    String @default("PENDING")
+  reviewedBy String?
+  createdAt DateTime @default(now())
+}
+
+model DashboardAlert {
+  id        String @id @default(cuid())
+  title     String
+  message   String
+  severity  String
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model RevenueSnapshot {
+  id        String @id @default(cuid())
+  period    DateTime
+  revenue   Decimal @db.Decimal(12, 2)
+  orders    Int
+  @@unique([period])
+}
+
+model PaymentProviderConfig {
+  id        String @id @default(cuid())
+  provider  String @unique
+  enabled   Boolean @default(false)
+  baseUrl   String?
+  callbackUrl String?
+}
+
+model DataPurgeLog {
+  id        String @id @default(cuid())
+  entity    String
+  deletedCount Int
+  executedAt DateTime @default(now())
+}
+
+model CronLock {
+  name      String @id
+  lockedAt  DateTime?
+  lockedBy  String?
+}
+
+model OutgoingEmail {
+  id        String @id @default(cuid())
+  to        String
+  subject   String
+  status    String @default("PENDING")
+  sentAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
+model AppMetric {
+  id        String @id @default(cuid())
+  name      String
+  value     Decimal @db.Decimal(18, 4)
+  recordedAt DateTime @default(now())
+  @@index([name, recordedAt])
+}
+
+model ServiceToken {
+  id        String @id @default(cuid())
+  service   String @unique
+  tokenHash String
+  expiresAt DateTime?
+}
+
+model Incident {
+  id        String @id @default(cuid())
+  title     String
+  severity  String
+  status    String @default("OPEN")
+  openedAt  DateTime @default(now())
+  resolvedAt DateTime?
+}
+
+model ChangeRequest {
+  id        String @id @default(cuid())
+  requestedBy String
+  description String
+  status    String @default("PENDING")
+  approvedBy String?
+  createdAt DateTime @default(now())
+}
+
+model KpiTarget {
+  id        String @id @default(cuid())
+  name      String @unique
+  target    Decimal @db.Decimal(12, 2)
+  active    Boolean @default(true)
+}
+
+model KpiSnapshot {
+  id        String @id @default(cuid())
+  kpi       String
+  value     Decimal @db.Decimal(12, 2)
+  period    DateTime
+  @@unique([kpi, period])
+}
+
+model VersionedSetting {
+  id        String @id @default(cuid())
+  key       String
+  value     Json
+  version   Int
+  createdAt DateTime @default(now())
+  @@unique([key, version])
+}
+
+model ApiConsumer {
+  id        String @id @default(cuid())
+  name      String
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+}
+
+model ApiConsumerScope {
+  id        String @id @default(cuid())
+  consumerId String
+  scope     String
+  @@unique([consumerId, scope])
+}
+
+model DataSyncRun {
+  id        String @id @default(cuid())
+  source    String
+  status    String
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+}
+
+model DataSyncItem {
+  id        String @id @default(cuid())
+  runId     String
+  entity    String
+  externalId String
+  status    String
+  message   String?
+}
+
+model CustomerConsent {
+  id        String @id @default(cuid())
+  customerId String
+  type      String
+  grantedAt DateTime @default(now())
+}
+
+model MarketingEvent {
+  id        String @id @default(cuid())
+  customerId String?
+  event     String
+  createdAt DateTime @default(now())
+}
+
+model AuditExport {
+  id        String @id @default(cuid())
+  requestedBy String
+  status    String @default("PENDING")
+  createdAt DateTime @default(now())
+}
+
+model DatabaseHealth {
+  id        String @id @default(cuid())
+  checkedAt DateTime @default(now())
+  status    String
+  latencyMs Int?
+}
+
+model ApiUsage {
+  id        String @id @default(cuid())
+  key       String
+  count     Int @default(0)
+  period    DateTime
+  @@unique([key, period])
+}
+
+model UserRoleHistory {
+  id        String @id @default(cuid())
+  clerkUserId String
+  role      Role
+  changedAt DateTime @default(now())
+  changedBy String?
+}
+
+model PermissionAudit {
+  id        String @id @default(cuid())
+  userId    String
+  permission String
+  allowed   Boolean
+  checkedAt DateTime @default(now())
+}
+
+model StaffAvailability {
+  id        String @id @default(cuid())
+  clerkUserId String
+  date      DateTime
+  available Boolean @default(true)
+}
+
+model StaffSchedule {
+  id        String @id @default(cuid())
+  clerkUserId String
+  startsAt  DateTime
+  endsAt    DateTime
+  role      Role
+}
+
+model VenueEvent {
+  id        String @id @default(cuid())
+  name      String
+  startsAt  DateTime
+  endsAt    DateTime
+  createdAt DateTime @default(now())
+}
+
+model EventReservation {
+  id        String @id @default(cuid())
+  eventId   String
+  customerId String?
+  seats     Int @default(1)
+}
+
+model TableLayout {
+  id        String @id @default(cuid())
+  name      String
+  layout    Json
+  updatedAt DateTime @updatedAt
+}
+
+model MenuVersion {
+  id        String @id @default(cuid())
+  name      String
+  active    Boolean @default(false)
+  publishedAt DateTime?
+}
+
+model MenuItem {
+  id        String @id @default(cuid())
+  menuVersionId String
+  productId String
+  displayOrder Int @default(0)
+}
+
+model ReceiptTemplate {
+  id        String @id @default(cuid())
+  name      String
+  content   Json
+  active    Boolean @default(false)
+}
+
+model TaxConfiguration {
+  id        String @id @default(cuid())
+  inclusive Boolean @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+model OrderNote {
+  id        String @id @default(cuid())
+  orderId   String
+  note      String
+  createdBy String
+  createdAt DateTime @default(now())
+}
+
+model OrderStatusHistory {
+  id        String @id @default(cuid())
+  orderId   String
+  fromStatus OrderStatus?
+  toStatus OrderStatus
+  changedBy String
+  createdAt DateTime @default(now())
+}
+
+model PaymentStatusHistory {
+  id        String @id @default(cuid())
+  paymentId String
+  fromStatus PaymentStatus?
+  toStatus PaymentStatus
+  createdAt DateTime @default(now())
+}
+
+model InventoryAdjustment {
+  id        String @id @default(cuid())
+  productId String
+  quantity  Decimal @db.Decimal(12, 3)
+  reason    String
+  approvedBy String?
+  createdAt DateTime @default(now())
+}
+
+model Stocktake {
+  id        String @id @default(cuid())
+  name      String
+  status    String @default("OPEN")
+  startedAt DateTime @default(now())
+  completedAt DateTime?
+}
+
+model StocktakeItem {
+  id        String @id @default(cuid())
+  stocktakeId String
+  productId String
+  expected  Decimal @db.Decimal(12, 3)
+  counted   Decimal?
+}
+
+model SupplierProduct {
+  id        String @id @default(cuid())
+  supplierId String
+  productId String
+  costPrice Decimal @db.Decimal(12, 2)
+  @@unique([supplierId, productId])
+}
+
+model InventoryLocation {
+  id        String @id @default(cuid())
+  name      String @unique
+}
+
+model ProductLocationStock {
+  id        String @id @default(cuid())
+  productId String
+  locationId String
+  quantity  Decimal @default(0) @db.Decimal(12, 3)
+  @@unique([productId, locationId])
+}
+
+model TransferRequest {
+  id        String @id @default(cuid())
+  productId String
+  fromLocationId String
+  toLocationId String
+  quantity  Decimal @db.Decimal(12, 3)
+  status    String @default("PENDING")
+}
+
+model PaymentProviderEvent {
+  id        String @id @default(cuid())
+  provider  String
+  eventId   String
+  eventType String
+  receivedAt DateTime @default(now())
+  payload   Json
+  @@unique([provider, eventId])
+}
+
+model ReconciliationBatch {
+  id        String @id @default(cuid())
+  provider  String
+  status    String @default("OPEN")
+  startedAt DateTime @default(now())
+  completedAt DateTime?
+}
+
+model ReconciliationItem {
+  id        String @id @default(cuid())
+  batchId   String
+  externalId String
+  amount    Decimal @db.Decimal(12, 2)
+  status    String
+}
+
+model WebhookRetry {
+  id        String @id @default(cuid())
+  webhookId String
+  attempt  Int
+  nextAttemptAt DateTime
+}
+
+model PaymentLink {
+  id        String @id @default(cuid())
+  orderId   String
+  url       String
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model CashTransaction {
+  id        String @id @default(cuid())
+  shiftId   String
+  type      String
+  amount    Decimal @db.Decimal(12, 2)
+  reason    String
+  createdAt DateTime @default(now())
+}
+
+model CardTerminalTransaction {
+  id        String @id @default(cuid())
+  orderId   String
+  terminalRef String?
+  amount    Decimal @db.Decimal(12, 2)
+  status    String
+  createdAt DateTime @default(now())
+}
+
+model PaymentFee {
+  id        String @id @default(cuid())
+  paymentId String
+  amount    Decimal @db.Decimal(12, 2)
+}
+
+model BalanceSnapshot {
+  id        String @id @default(cuid())
+  account   String
+  balance   Decimal @db.Decimal(12, 2)
+  capturedAt DateTime @default(now())
+}
+
+model ReorderThreshold {
+  id        String @id @default(cuid())
+  productId String @unique
+  threshold Decimal @db.Decimal(12, 3)
+}
+
+model ScheduledJob {
+  id        String @id @default(cuid())
+  name      String @unique
+  cron      String
+  enabled   Boolean @default(true)
+}
+
+model ApiEndpoint {
+  id        String @id @default(cuid())
+  method    String
+  path      String @unique
+  enabled   Boolean @default(true)
+}
+
+model FeaturePermission {
+  id        String @id @default(cuid())
+  feature   String
+  role      Role
+  enabled   Boolean @default(true)
+  @@unique([feature, role])
+}
+
+model UserFeatureOverride {
+  id        String @id @default(cuid())
+  clerkUserId String
+  feature   String
+  enabled   Boolean
+  @@unique([clerkUserId, feature])
+}
+
+model AnalyticsEvent {
+  id        String @id @default(cuid())
+  event     String
+  properties Json?
+  clerkUserId String?
+  createdAt DateTime @default(now())
+}
+
+model FunnelStep {
+  id        String @id @default(cuid())
+  funnel   String
+  step     String
+  count    Int @default(0)
+  recordedAt DateTime @default(now())
+}
+
+model DataWarehouseSync {
+  id        String @id @default(cuid())
+  status    String
+  startedAt DateTime @default(now())
+  completedAt DateTime?
+}
+
+model DataWarehouseRecord {
+  id        String @id @default(cuid())
+  syncId    String
+  entity    String
+  entityId  String
+  payload   Json
+}
+
+model NotificationRule {
+  id        String @id @default(cuid())
+  event     String
+  role      Role
+  enabled   Boolean @default(true)
+}
+
+model RoleNotificationSetting {
+  id        String @id @default(cuid())
+  role      Role
+  type      NotificationType
+  enabled   Boolean @default(true)
+  @@unique([role, type])
+}
+
+model UserNotificationCursor {
+  id        String @id @default(cuid())
+  clerkUserId String @unique
+  lastReadAt DateTime?
+}
+
+model DataQualityIssue {
+  id        String @id @default(cuid())
+  entity    String
+  entityId  String?
+  message   String
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model DataQualityRun {
+  id        String @id @default(cuid())
+  status    String
+  startedAt DateTime @default(now())
+  completedAt DateTime?
+}
+
+model SystemConfig {
+  key       String @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model EnvironmentConfig {
+  id        String @id @default(cuid())
+  environment String @unique
+  active    Boolean @default(false)
+}
+
+model DeploymentRecord {
+  id        String @id @default(cuid())
+  deploymentId String @unique
+  environment String
+  createdAt DateTime @default(now())
+}
+
+model ReleaseDeployment {
+  id        String @id @default(cuid())
+  releaseId String
+  deploymentId String
+}
+
+model IncidentUpdate {
+  id        String @id @default(cuid())
+  incidentId String
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model OperationsNote {
+  id        String @id @default(cuid())
+  note      String
+  createdBy String
+  createdAt DateTime @default(now())
+}
+
+model Checklist {
+  id        String @id @default(cuid())
+  name      String
+  active    Boolean @default(true)
+}
+
+model ChecklistItem {
+  id        String @id @default(cuid())
+  checklistId String
+  label     String
+  completed Boolean @default(false)
+}
+
+model UserChecklist {
+  id        String @id @default(cuid())
+  checklistId String
+  clerkUserId String
+  completedAt DateTime?
+}
+
+model SystemTask {
+  id        String @id @default(cuid())
+  title     String
+  status    String @default("OPEN")
+  assignedTo String?
+  dueAt     DateTime?
+}
+
+model TaskComment {
+  id        String @id @default(cuid())
+  taskId    String
+  clerkUserId String
+  comment   String
+  createdAt DateTime @default(now())
+}
+
+model UserTask {
+  id        String @id @default(cuid())
+  taskId    String
+  clerkUserId String
+  assignedAt DateTime @default(now())
+}
+
+model Feedback {
+  id        String @id @default(cuid())
+  clerkUserId String?
+  message   String
+  rating    Int?
+  createdAt DateTime @default(now())
+}
+
+model SystemSurvey {
+  id        String @id @default(cuid())
+  name      String
+  active    Boolean @default(false)
+}
+
+model SurveyResponse {
+  id        String @id @default(cuid())
+  surveyId  String
+  clerkUserId String?
+  answers   Json
+  createdAt DateTime @default(now())
+}
+
+model AppAnnouncementRead {
+  id        String @id @default(cuid())
+  announcementId String
+  clerkUserId String
+  readAt    DateTime @default(now())
+  @@unique([announcementId, clerkUserId])
+}
+
+model AuthAudit {
+  id        String @id @default(cuid())
+  clerkUserId String?
+  action    String
+  createdAt DateTime @default(now())
+}
+
+model ManagerApproval {
+  id        String @id @default(cuid())
+  requestId String
+  managerId String
+  decision  String
+  decidedAt DateTime @default(now())
+}
+
+model RoleCatalog {
+  id        String @id @default(cuid())
+  role      Role @unique
+  label     String
+  description String
+}
+
+model DatabaseMigrationLock {
+  id        String @id @default(cuid())
+  lockName  String @unique
+  acquiredAt DateTime?
+}
+
+model SeedStatus {
+  id        String @id @default(cuid())
+  key       String @unique
+  completed Boolean @default(false)
+  completedAt DateTime?
+}
+
+model AppInstall {
+  id        String @id @default(cuid())
+  installedAt DateTime @default(now())
+  version   String
+}
+
+model PesaPalConfig {
+  id        String @id @default(cuid())
+  consumerKeyEnv String @default("PESAPAL_CONSUMER_KEY")
+  consumerSecretEnv String @default("PESAPAL_CONSUMER_SECRET")
+  enabled   Boolean @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+model PesaPalCallback {
+  id        String @id @default(cuid())
+  orderTrackingId String
+  orderNotificationId String?
+  status    String
+  payload  Json?
+  receivedAt DateTime @default(now())
+}
+
+model PesaPalIpn {
+  id        String @id @default(cuid())
+  notificationId String @unique
+  url       String
+  active    Boolean @default(true)
+}
+
+model PaymentSettlement {
+  id        String @id @default(cuid())
+  paymentId String
+  settledAmount Decimal @db.Decimal(12, 2)
+  settledAt DateTime?
+  status    String @default("PENDING")
+}
+
+model ApiError {
+  id        String @id @default(cuid())
+  path      String
+  message   String
+  clerkUserId String?
+  createdAt DateTime @default(now())
+}
+
+model RequestTrace {
+  id        String @id @default(cuid())
+  traceId   String @unique
+  path      String
+  createdAt DateTime @default(now())
+}
+
+model DatabaseConnection {
+  id        String @id @default(cuid())
+  name      String @unique
+  status    String
+  checkedAt DateTime @updatedAt
+}
+
+model RuntimeConfig {
+  id        String @id @default(cuid())
+  key       String @unique
+  value     String?
+  updatedAt DateTime @updatedAt
+}
+
+model AdminAction {
+  id        String @id @default(cuid())
+  adminId   String
+  action    String
+  targetId  String?
+  createdAt DateTime @default(now())
+}
+
+model RoleAssignment {
+  id        String @id @default(cuid())
+  clerkUserId String
+  role      Role
+  assignedBy String
+  createdAt DateTime @default(now())
+  @@unique([clerkUserId, role])
+}
+
+model SessionAudit {
+  id        String @id @default(cuid())
+  clerkUserId String
+  action    String
+  createdAt DateTime @default(now())
+}
+
+model BrowserSession {
+  id        String @id @default(cuid())
+  clerkUserId String
+  userAgent String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+model MobileDevice {
+  id        String @id @default(cuid())
+  clerkUserId String
+  deviceId  String
+  lastSeenAt DateTime @updatedAt
+  @@unique([clerkUserId, deviceId])
+}
+
+model DataPolicy {
+  id        String @id @default(cuid())
+  name      String @unique
+  definition Json
+  active    Boolean @default(true)
+}
+
+model AccessPolicy {
+  id        String @id @default(cuid())
+  name      String @unique
+  definition Json
+  active    Boolean @default(true)
+}
+
+model RuleExecution {
+  id        String @id @default(cuid())
+  rule      String
+  result    Json?
+  createdAt DateTime @default(now())
+}
+
+model NotificationTemplate {
+  id        String @id @default(cuid())
+  key       String @unique
+  title     String
+  body      String
+}
+
+model Broadcast {
+  id        String @id @default(cuid())
+  title     String
+  message   String
+  createdBy String
+  sentAt    DateTime?
+}
+
+model BroadcastRecipient {
+  id        String @id @default(cuid())
+  broadcastId String
+  clerkUserId String
+  deliveredAt DateTime?
+}
+
+model RoleRequest {
+  id        String @id @default(cuid())
+  clerkUserId String
+  role      Role
+  status    String @default("PENDING")
+  createdAt DateTime @default(now())
+}
+
+model BusinessRule {
+  id        String @id @default(cuid())
+  key       String @unique
+  value     Json
+  active    Boolean @default(true)
+}
+
+model OrderSequence {
+  id        String @id @default(cuid())
+  date      DateTime @unique
+  nextValue Int @default(1)
+}
+
+model ReceiptSequence {
+  id        String @id @default(cuid())
+  date      DateTime @unique
+  nextValue Int @default(1)
+}
+
+model PaymentSequence {
+  id        String @id @default(cuid())
+  date      DateTime @unique
+  nextValue Int @default(1)
+}
+
+model DataArchive {
+  id        String @id @default(cuid())
+  entity    String
+  entityId  String
+  payload   Json
+  archivedAt DateTime @default(now())
+}
+
+model DeletedRecord {
+  id        String @id @default(cuid())
+  entity    String
+  entityId  String
+  deletedBy String?
+  deletedAt DateTime @default(now())
+}
+
+model RestoreRequest {
+  id        String @id @default(cuid())
+  entity    String
+  entityId  String
+  requestedBy String
+  approvedBy String?
+  status    String @default("PENDING")
+  createdAt DateTime @default(now())
+}
+
+model DataLineage {
+  id        String @id @default(cuid())
+  source    String
+  target    String
+  relation  String
+}
+
+model FieldDefinition {
+  id        String @id @default(cuid())
+  entity    String
+  field     String
+  type      String
+  required  Boolean @default(false)
+  @@unique([entity, field])
+}
+
+model SchemaVersion {
+  id        String @id @default(cuid())
+  version   String @unique
+  appliedAt DateTime @default(now())
+}
+
+model PrismaMigration {
+  id        String @id @default(cuid())
+  name      String @unique
+  appliedAt DateTime @default(now())
+}
