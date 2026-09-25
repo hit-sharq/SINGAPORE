@@ -1373,7 +1373,18 @@ function CustomersView({ data }: { data: DashboardData }) {
   )
 }
 
-function AdminView({ data, onNavChange }: { data: DashboardData; onNavChange: (label: string) => void }) {
+function AdminView({ data }: { data: DashboardData }) {
+  const [activeTab, setActiveTab] = useState<'staff' | 'settings' | 'integrations' | 'audit' | 'flags' | 'export'>('staff')
+
+  const tabs = [
+    { id: 'staff', label: 'Staff Management', icon: UserCog, desc: 'Manage roles, permissions, and invites' },
+    { id: 'settings', label: 'System Settings', icon: Settings, desc: 'Venue config, tax rules, receipt templates' },
+    { id: 'integrations', label: 'Integrations', icon: CreditCard, desc: 'Pesapal, printers, payment terminals' },
+    { id: 'audit', label: 'Audit Logs', icon: ClipboardList, desc: 'Track all system changes and actions' },
+    { id: 'flags', label: 'Feature Flags', icon: Activity, desc: 'Toggle features across the venue' },
+    { id: 'export', label: 'Data Export', icon: Truck, desc: 'Export reports and backups' },
+  ] as const
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1385,25 +1396,54 @@ function AdminView({ data, onNavChange }: { data: DashboardData; onNavChange: (l
           <p className="text-sm text-[#878981]">System administration and configuration</p>
         </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {[
-          { title: 'Staff Management', desc: 'Manage roles, permissions, and invites', icon: UserCog, nav: 'Staff' },
-          { title: 'System Settings', desc: 'Venue config, tax rules, receipt templates', icon: Settings, nav: 'Settings' },
-          { title: 'Integrations', desc: 'Pesapal, printers, payment terminals', icon: CreditCard, nav: 'Settings' },
-          { title: 'Audit Logs', desc: 'Track all system changes and actions', icon: ClipboardList, nav: 'Settings' },
-          { title: 'Feature Flags', desc: 'Toggle features across the venue', icon: Activity, nav: 'Settings' },
-          { title: 'Data Export', desc: 'Export reports and backups', icon: Truck, nav: 'Reports' },
-        ].map((item) => (
+      <div className="flex gap-1 border-b border-white/[0.08] overflow-x-auto pb-1">
+        {tabs.map((tab) => (
           <button
-            key={item.title}
-            onClick={() => onNavChange(item.nav)}
-            className="border border-white/[0.08] bg-[#181a17] p-5 hover:border-[#d8a85b]/40 transition-colors text-left focus:outline-none focus:ring-2 focus:ring-[#d8a85b]/40"
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2 text-sm whitespace-nowrap transition ${
+              activeTab === tab.id
+                ? 'text-[#d8a85b] border-b-2 border-[#d8a85b]'
+                : 'text-[#787a73] hover:text-white'
+            }`}
           >
-            <item.icon size={22} className="text-[#d8a85b] mb-3" />
-            <h3 className="font-semibold">{item.title}</h3>
-            <p className="mt-1 text-xs text-[#777971]">{item.desc}</p>
+            <tab.icon size={15} />
+            {tab.label}
           </button>
         ))}
+      </div>
+      <div className="border border-white/[0.08] bg-[#181a17] rounded-lg p-6 min-h-[400px]">
+        {activeTab === 'staff' && <StaffView data={data} />}
+        {activeTab === 'settings' && (
+          <div className="space-y-4">
+            <h3 className="font-semibold">System Settings</h3>
+            <p className="text-[#777971]">Venue configuration, tax rules, receipt templates - coming soon</p>
+          </div>
+        )}
+        {activeTab === 'integrations' && (
+          <div className="space-y-4">
+            <h3 className="font-semibold">Integrations</h3>
+            <p className="text-[#777971]">Pesapal, printers, payment terminals - coming soon</p>
+          </div>
+        )}
+        {activeTab === 'audit' && (
+          <div className="space-y-4">
+            <h3 className="font-semibold">Audit Logs</h3>
+            <p className="text-[#777971]">Track all system changes and actions - coming soon</p>
+          </div>
+        )}
+        {activeTab === 'flags' && (
+          <div className="space-y-4">
+            <h3 className="font-semibold">Feature Flags</h3>
+            <p className="text-[#777971]">Toggle features across the venue - coming soon</p>
+          </div>
+        )}
+        {activeTab === 'export' && (
+          <div className="space-y-4">
+            <h3 className="font-semibold">Data Export</h3>
+            <p className="text-[#777971]">Export reports and backups - use Reports tab for now</p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -2697,7 +2737,7 @@ export default function Page() {
       case 'Customers':
         return <CustomersView data={data} />
       case 'Admin':
-        return <AdminView data={data} onNavChange={setActiveNav} />
+        return <AdminView data={data} />
       case 'Reports':
         return <ReportsView data={data} />
       case 'Staff':
