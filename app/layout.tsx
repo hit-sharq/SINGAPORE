@@ -1,12 +1,11 @@
-import { ClerkProvider } from '@clerk/nextjs'
+import { ClerkProvider } from '@clerk/nextjs';
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Singapore Club · Operations',
-  description: 'Premium bar, pool and club operations management for Singapore Club.',
-  generator: 'v0.app',
+  description: 'A connected operations system for Singapore Club service, sales, inventory, staff, and guest experience.',
   icons: {
     icon: [
       {
@@ -41,9 +40,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased" suppressHydrationWarning>
-        <ClerkProvider dynamic signInUrl="/sign-in" signUpUrl="/sign-up">{children}</ClerkProvider>
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+      <body className="antialiased">
+        <ClerkProvider>
+          {children}
+          {process.env.NODE_ENV === 'production' && <Analytics />}
+        </ClerkProvider>
       </body>
     </html>
   )
