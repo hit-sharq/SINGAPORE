@@ -1,5 +1,7 @@
 #add all gitignore files
-node modules
+node_modules
 .env
 .next
 node_modules
+tsconfig.tsbuildinfo
+

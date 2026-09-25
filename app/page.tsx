@@ -9,24 +9,33 @@ import {
   Calendar,
   CalendarDays,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleDollarSign,
   Clock3,
   Coffee,
   CreditCard,
   Download,
+  Edit,
+  Eye,
+  Filter,
   LayoutDashboard,
+  Loader2,
   Mail,
   Menu,
   MoreHorizontal,
   Package,
+  Percent,
   Plus,
   Printer,
+  RefreshCw,
   Search,
   Settings,
   ShoppingBag,
   Spade,
   Table2,
   Tag,
+  Trash2,
   Users,
   Wine,
   X,
@@ -36,10 +45,12 @@ import {
   Truck,
   UserCog,
   UserPlus,
-  Trash2,
-  Edit,
-  Eye,
-  Percent,
+  ToggleLeft,
+  ToggleRight,
+  FileText,
+  ExternalLink,
+  Wifi,
+  WifiOff,
 } from 'lucide-react'
 
 type Category = { name: string }
@@ -1572,46 +1583,892 @@ function AdminView({ data }: { data: DashboardData }) {
       </div>
       <div className="border border-white/[0.08] bg-[#181a17] rounded-lg p-6 min-h-[400px]">
         {activeTab === 'staff' && <StaffView data={data} />}
-        {activeTab === 'settings' && (
-          <div className="space-y-4">
-            <h3 className="font-semibold">System Settings</h3>
-            <p className="text-[#777971]">Venue configuration, tax rules, receipt templates - coming soon</p>
-          </div>
-        )}
-        {activeTab === 'integrations' && (
-          <div className="space-y-4">
-            <h3 className="font-semibold">Integrations</h3>
-            <p className="text-[#777971]">Pesapal, printers, payment terminals - coming soon</p>
-          </div>
-        )}
-        {activeTab === 'audit' && (
-          <div className="space-y-4">
-            <h3 className="font-semibold">Audit Logs</h3>
-            <p className="text-[#777971]">Track all system changes and actions - coming soon</p>
-          </div>
-        )}
-        {activeTab === 'flags' && (
-          <div className="space-y-4">
-            <h3 className="font-semibold">Feature Flags</h3>
-            <p className="text-[#777971]">Toggle features across the venue - coming soon</p>
-          </div>
-        )}
-        {activeTab === 'export' && (
-          <div className="space-y-4">
-            <h3 className="font-semibold">Data Export</h3>
-            <p className="text-[#777971]">Export reports and backups - use Reports tab for now</p>
-          </div>
-        )}
+        {activeTab === 'settings' && <SettingsView />}
+        {activeTab === 'integrations' && <IntegrationsView />}
+        {activeTab === 'audit' && <AuditLogsView />}
+        {activeTab === 'flags' && <FeatureFlagsView />}
+        {activeTab === 'export' && <DataExportView />}
       </div>
     </div>
   )
 }
 
+type PesapalConfig = {
+  consumerKey: string
+  consumerSecret: string
+  ipnUrl: string
+  enabled: boolean
+}
+
+type Printer = { id: string; name: string; endpoint: string; active: boolean }
+
+function IntegrationsView() {
+  const [pesapal, setPesapal] = useState<PesapalConfig>({
+    consumerKey: '',
+    consumerSecret: '',
+    ipnUrl: '',
+    enabled: false,
+  })
+  const [printers, setPrinters] = useState<Printer[]>([])
+  const [health, setHealth] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [pesapalSaving, setPesapalSaving] = useState(false)
+  const [tester, setTester] = useState<{ id: string; name: string; status: string | null } | null>(null)
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    setLoading(true)
+    try {
+      const [pesapalRes, printersRes, healthRes] = await Promise.all([
+        fetch('/api/integrations/pesapal'),
+        fetch('/api/settings/printers'),
+        fetch('/api/integrations/health'),
+      ])
+      if (pesapalRes.ok) {
+        const d = await pesapalRes.json()
+        setPesapal(d.config)
+      }
+      if (printersRes.ok) {
+        const d = await printersRes.json()
+        setPrinters(d.printers)
+      }
+      if (healthRes.ok) {
+        const d = await healthRes.json()
+        setHealth(d.health)
+      }
+    } catch (e) {
+      console.error('Failed to load integrations:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const savePesapal = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPesapalSaving(true)
+    try {
+      const res = await fetch('/api/integrations/pesapal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pesapal),
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to save')
+      alert('Pesapal credentials saved')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setPesapalSaving(false)
+    }
+  }
+
+  const testPrinter = async (id: string, name: string) => {
+    setTester({ id, name, status: 'testing' })
+    try {
+      const res = await fetch(`/api/integrations/printers/${id}/test`, { method: 'POST' })
+      const result = await res.json()
+      setTester({ id, name, status: result.online ? 'online' : 'offline' })
+    } catch {
+      setTester({ id, name, status: 'error' })
+    }
+  }
+
+  const getHealthStatus = (provider: string) => {
+    const record = health.find((h) => h.provider === provider)
+    if (!record) return { label: 'Unknown', color: 'text-[#777971]' }
+    if (record.status === 'UP') return { label: 'Online', color: 'text-[#7cc58f]' }
+    if (record.status === 'DEGRADED') return { label: 'Degraded', color: 'text-[#d8a85b]' }
+    return { label: 'Down', color: 'text-red-400' }
+  }
+
+  const terminalStatus = getHealthStatus('CARD_TERMINAL')
+  const pesapalHealth = getHealthStatus('PESAPAL')
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <h3 className="font-semibold">Integrations</h3>
+        <div className="text-center py-8 text-[#777971]">Loading integrations...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h3 className="font-semibold mb-4 flex items-center gap-2">
+          <CreditCard size={16} className="text-[#d8a85b]" />
+          Pesapal Integration
+        </h3>
+        <form onSubmit={savePesapal} className="space-y-4 max-w-xl">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="block text-xs text-[#787a73] mb-1">Consumer Key</label>
+              <input
+                type="text"
+                value={pesapal.consumerKey}
+                onChange={(e) => setPesapal({ ...pesapal, consumerKey: e.target.value })}
+                className="w-full rounded-md border border-white/[0.1] bg-[#111210] px-3 py-2 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+                placeholder="Pesapal consumer key"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-[#787a73] mb-1">Consumer Secret</label>
+              <input
+                type="password"
+                value={pesapal.consumerSecret}
+                onChange={(e) => setPesapal({ ...pesapal, consumerSecret: e.target.value })}
+                className="w-full rounded-md border border-white/[0.1] bg-[#111210] px-3 py-2 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+                placeholder="Pesapal consumer secret"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-[#787a73] mb-1">IPN Callback URL</label>
+            <input
+              type="url"
+              value={pesapal.ipnUrl}
+              onChange={(e) => setPesapal({ ...pesapal, ipnUrl: e.target.value })}
+              className="w-full rounded-md border border-white/[0.1] bg-[#111210] px-3 py-2 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+              placeholder="https://yoursite.com/api/pesapal/ipn"
+            />
+          </div>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-xs text-[#787a73] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={pesapal.enabled}
+                onChange={(e) => setPesapal({ ...pesapal, enabled: e.target.checked })}
+                className="rounded border-white/[0.2] bg-[#181a17] text-[#d8a85b] focus:ring-[#d8a85b]"
+              />
+              Enable Pesapal
+            </label>
+            {pesapalHealth.label !== 'Unknown' && (
+              <span className={`text-xs ${pesapalHealth.color}`}>{pesapalHealth.label}</span>
+            )}
+          </div>
+          <button
+            type="submit"
+            disabled={pesapalSaving}
+            className="px-4 py-2 text-sm bg-[#d8a85b] text-[#1b1914] font-medium rounded hover:bg-[#e4b96d] disabled:opacity-50"
+          >
+            {pesapalSaving ? 'Saving...' : 'Save Pesapal Credentials'}
+          </button>
+        </form>
+      </div>
+
+      <div>
+        <h3 className="font-semibold mb-4 flex items-center gap-2">
+          <Printer size={16} className="text-[#d8a85b]" />
+          Printer Management
+        </h3>
+        <div className="border border-white/[0.08] bg-[#181a17] rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
+                <th className="px-4 py-2">Name</th>
+                <th className="px-4 py-2">Endpoint</th>
+                <th className="px-4 py-2">Status</th>
+                <th className="px-4 py-2">Test</th>
+              </tr>
+            </thead>
+            <tbody>
+              {printers.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-4 text-center text-[#777971]">
+                    No printers configured. Add via System Settings.
+                  </td>
+                </tr>
+              ) : (
+                printers.map((p) => (
+                  <tr key={p.id} className="border-t border-white/[0.03]">
+                    <td className="px-4 py-2">{p.name}</td>
+                    <td className="px-4 py-2 text-[#787a73] truncate max-w-[200px]">{p.endpoint}</td>
+                    <td className="px-4 py-2">
+                      <span className={`px-2 py-0.5 text-xs rounded ${
+                        p.active ? 'bg-[#7cc58f]/20 text-[#7cc58f]' : 'text-[#777971]'
+                      }`}>
+                        {p.active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      {tester && tester.id === p.id ? (
+                        tester.status === 'testing' ? (
+                          <span className="text-xs text-[#787a73]">Testing...</span>
+                        ) : (
+                          <span className={`text-xs ${
+                            tester.status === 'online' ? 'text-[#7cc58f]' : 'text-red-400'
+                          }`}>
+                            {tester.status}
+                          </span>
+                        )
+                      ) : (
+                        <button
+                          onClick={() => testPrinter(p.id, p.name)}
+                          className="text-xs text-[#d8a85b] hover:underline flex items-center gap-1"
+                        >
+                          Test
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="font-semibold mb-4 flex items-center gap-2">
+          <Wifi size={16} className="text-[#d8a85b]" />
+          Payment Terminal Status
+        </h3>
+        <div className="border border-white/[0.08] bg-[#181a17] rounded-lg">
+          <div className="grid grid-cols-3 gap-3 px-4 py-3 border-b border-white/[0.06] text-[10px] font-medium uppercase tracking-[0.1em] text-[#787a73]">
+            <div>Service</div>
+            <div>Status</div>
+            <div>Last Checked</div>
+          </div>
+          <div className="px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between py-2 border-b border-white/[0.03]">
+              <span className="text-sm">Card Terminal</span>
+              <span className={`text-xs ${terminalStatus.color} flex items-center gap-1`}>
+                <span className="size-1.5 rounded-full bg-current" />
+                {terminalStatus.label}
+              </span>
+              <span className="text-xs text-[#787a73]">
+                {health.find((h) => h.provider === 'CARD_TERMINAL')?.checkedAt
+                  ? formatTime(health.find((h) => h.provider === 'CARD_TERMINAL')!.checkedAt)
+                  : '—'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-2">
+              <span className="text-sm">Pesapal Gateway</span>
+              <span className={`text-xs ${pesapalHealth.color} flex items-center gap-1`}>
+                <span className="size-1.5 rounded-full bg-current" />
+                {pesapalHealth.label}
+              </span>
+              <span className="text-xs text-[#787a73]">
+                {health.find((h) => h.provider === 'PESAPAL')?.checkedAt
+                  ? formatTime(health.find((h) => h.provider === 'PESAPAL')!.checkedAt)
+                  : '—'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type AuditLogEntry = {
+  id: string
+  action: string
+  entity: string
+  entityId: string | null
+  metadata: any
+  user: { id: string; name: string; email: string; role: string }
+  createdAt: string
+}
+
+function AuditLogsView() {
+  const [logs, setLogs] = useState<AuditLogEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filters, setFilters] = useState({ action: '', entity: '', userId: '', startDate: '', endDate: '' })
+  const [pagination, setPagination] = useState<{ page: number; limit: number; total: number; pages: number }>({
+    page: 1, limit: 50, total: 0, pages: 0,
+  })
+  const [availableActions, setAvailableActions] = useState<string[]>([])
+  const [availableEntities, setAvailableEntities] = useState<string[]>([])
+
+  const fetchLogs = async (page = 1) => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      params.set('page', String(page))
+      params.set('limit', String(pagination.limit))
+      if (filters.action) params.set('action', filters.action)
+      if (filters.entity) params.set('entity', filters.entity)
+      if (filters.userId) params.set('userId', filters.userId)
+      if (filters.startDate) params.set('startDate', filters.startDate)
+      if (filters.endDate) params.set('endDate', filters.endDate)
+
+      const res = await fetch(`/api/audit-logs?${params.toString()}`)
+      if (res.ok) {
+        const d = await res.json()
+        setLogs(d.logs)
+        setPagination(d.pagination)
+        setAvailableActions(d.filters.actions)
+        setAvailableEntities(d.filters.entities)
+      }
+    } catch (e) {
+      console.error('Failed to load audit logs:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchLogs(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const applyFilters = () => {
+    setPagination((p) => ({ ...p, page: 1 }))
+    fetchLogs(1)
+  }
+
+  const clearFilters = () => {
+    setFilters({ action: '', entity: '', userId: '', startDate: '', endDate: '' })
+    fetchLogs(1)
+  }
+
+  const formatMetadata = (metadata: any) => {
+    if (!metadata) return '—'
+    try {
+      return JSON.stringify(metadata)
+    } catch {
+      return String(metadata)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="font-semibold mb-1 flex items-center gap-2">
+          <ClipboardList size={16} className="text-[#d8a85b]" />
+          Audit Logs
+        </h3>
+        <p className="text-sm text-[#878981]">Track all system changes and actions</p>
+      </div>
+
+      <div className="border border-white/[0.08] bg-[#111210] p-4 rounded-lg space-y-3">
+        <div className="grid gap-3 md:grid-cols-5">
+          <div>
+            <label className="block text-xs text-[#787a73] mb-1">Action</label>
+            <select
+              value={filters.action}
+              onChange={(e) => setFilters({ ...filters, action: e.target.value })}
+              className="w-full h-9 rounded-md border border-white/[0.1] bg-[#181a17] px-3 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+            >
+              <option value="">All</option>
+              {availableActions.map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[#787a73] mb-1">Entity</label>
+            <select
+              value={filters.entity}
+              onChange={(e) => setFilters({ ...filters, entity: e.target.value })}
+              className="w-full h-9 rounded-md border border-white/[0.1] bg-[#181a17] px-3 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+            >
+              <option value="">All</option>
+              {availableEntities.map((e) => (
+                <option key={e} value={e}>{e}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[#787a73] mb-1">Date From</label>
+            <input
+              type="date"
+              value={filters.startDate}
+              onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+              className="w-full h-9 rounded-md border border-white/[0.1] bg-[#181a17] px-3 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-[#787a73] mb-1">Date To</label>
+            <input
+              type="date"
+              value={filters.endDate}
+              onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+              className="w-full h-9 rounded-md border border-white/[0.1] bg-[#181a17] px-3 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+            />
+          </div>
+          <div className="flex items-end gap-2">
+            <button
+              onClick={applyFilters}
+              className="flex-1 rounded-md bg-[#d8a85b] py-2 text-xs font-semibold text-[#1b1914] hover:bg-[#e4b96d]"
+            >
+              Apply
+            </button>
+            <button
+              onClick={clearFilters}
+              className="flex-1 rounded-md border border-white/[0.1] bg-white/[0.04] py-2 text-xs font-medium text-[#a4a59e] hover:bg-white/[0.08]"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="border border-white/[0.08] bg-[#181a17] rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
+              <th className="px-4 py-3 text-[10px] font-medium uppercase tracking-[0.1em]">Time</th>
+              <th className="px-4 py-3 text-[10px] font-medium uppercase tracking-[0.1em]">Action</th>
+              <th className="px-4 py-3 text-[10px] font-medium uppercase tracking-[0.1em]">Entity</th>
+              <th className="px-4 py-3 text-[10px] font-medium uppercase tracking-[0.1em]">User</th>
+              <th className="px-4 py-3 text-[10px] font-medium uppercase tracking-[0.1em]">Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-[#777971]">Loading logs...</td>
+              </tr>
+            ) : logs.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-[#777971]">No audit logs found.</td>
+              </tr>
+            ) : (
+              logs.map((log) => (
+                <tr key={log.id} className="border-t border-white/[0.03]">
+                  <td className="px-4 py-2 text-xs text-[#879181]">{formatTime(log.createdAt)}</td>
+                  <td className="px-4 py-2 text-xs font-mono">{log.action}</td>
+                  <td className="px-4 py-2 text-xs text-[#787a73]">{log.entity}</td>
+                  <td className="px-4 py-2 text-xs">{log.user?.name ?? '—'} <span className="text-[#787a73]">({log.user?.email ?? '—'})</span></td>
+                  <td className="px-4 py-2 text-xs text-[#787a73] max-w-[200px] truncate">{formatMetadata(log.metadata)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {pagination.total > 0 && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-[#787a73]">
+            {pagination.total} entries · Page {pagination.page} of {pagination.pages}
+          </span>
+          <div className="flex gap-2">
+            <button
+              disabled={pagination.page <= 1 || loading}
+              onClick={() => fetchLogs(pagination.page - 1)}
+              className="flex items-center gap-1 rounded-md border border-white/[0.1] bg-[#181a17] px-3 py-1.5 text-xs text-[#a4a59e] hover:border-[#d8a85b]/50 hover:text-[#d8a85b] disabled:opacity-40"
+            >
+              <ChevronLeft size={13} />
+              Prev
+            </button>
+            <button
+              disabled={pagination.page >= pagination.pages || loading}
+              onClick={() => fetchLogs(pagination.page + 1)}
+              className="flex items-center gap-1 rounded-md border border-white/[0.1] bg-[#181a17] px-3 py-1.5 text-xs text-[#a4a59e] hover:border-[#d8a85b]/50 hover:text-[#d8a85b] disabled:opacity-40"
+            >
+              Next
+              <ChevronRight size={13} />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+type FeatureFlag = { key: string; enabled: boolean; updatedAt: string }
+
+function FeatureFlagsView() {
+  const [flags, setFlags] = useState<FeatureFlag[]>([])
+  const [loading, setLoading] = useState(true)
+  const [newKey, setNewKey] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [toggling, setToggling] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchFlags()
+  }, [])
+
+  const fetchFlags = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/feature-flags')
+      if (res.ok) {
+        const d = await res.json()
+        setFlags(d.flags.map((f: any) => ({ key: f.key, enabled: f.enabled, updatedAt: f.updatedAt })))
+      }
+    } catch (e) {
+      console.error('Failed to load feature flags:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const toggleFlag = async (key: string, enabled: boolean) => {
+    setToggling(key)
+    try {
+      const res = await fetch(`/api/feature-flags/${key}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to update')
+      const d = await res.json()
+      setFlags(flags.map((f) => (f.key === key ? { ...f, enabled: d.flag.enabled, updatedAt: d.flag.updatedAt } : f)))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update flag')
+    } finally {
+      setToggling(null)
+    }
+  }
+
+  const addFlag = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newKey.trim()) return
+    setAdding(true)
+    try {
+      const res = await fetch('/api/feature-flags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: newKey, enabled: false }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to create')
+      const d = await res.json()
+      setFlags([...flags, { key: d.flag.key, enabled: d.flag.enabled, updatedAt: d.flag.updatedAt }].sort((a, b) => a.key.localeCompare(b.key)))
+      setNewKey('')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to create flag')
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  const deleteFlag = async (key: string) => {
+    if (!confirm(`Delete flag "${key}"?`)) return
+    setToggling(key)
+    try {
+      const res = await fetch(`/api/feature-flags/${key}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete')
+      setFlags(flags.filter((f) => f.key !== key))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete flag')
+    } finally {
+      setToggling(null)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="font-semibold mb-1 flex items-center gap-2">
+          <Activity size={16} className="text-[#d8a85b]" />
+          Feature Flags
+        </h3>
+        <p className="text-sm text-[#878981]">Toggle features across the venue</p>
+      </div>
+
+      <form onSubmit={addFlag} className="border border-white/[0.08] bg-[#111210] p-4 rounded-lg flex items-end gap-3 max-w-md">
+        <div className="flex-1">
+          <label className="block text-xs text-[#787a73] mb-1">New Flag Key</label>
+          <input
+            type="text"
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+            placeholder="e.g. loyalty_program"
+            pattern="[a-zA-Z][a-zA-Z0-9_]*"
+            className="w-full rounded-md border border-white/[0.1] bg-[#181a17] px-3 py-2 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={adding || !newKey.trim()}
+          className="rounded-md bg-[#d8a85b] py-2 px-4 text-xs font-semibold text-[#1b1914] hover:bg-[#e4b96d] disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {adding ? 'Adding...' : 'Add Flag'}
+        </button>
+      </form>
+
+      <div className="border border-white/[0.08] bg-[#181a17] rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
+              <th className="px-4 py-3 text-[10px] font-medium uppercase tracking-[0.1em]">Flag Key</th>
+              <th className="px-4 py-3 text-[10px] font-medium uppercase tracking-[0.1em]">Status</th>
+              <th className="px-4 py-3 text-[10px] font-medium uppercase tracking-[0.1em]">Updated</th>
+              <th className="px-4 py-3 text-[10px] font-medium uppercase tracking-[0.1em]"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-[#777971]">Loading flags...</td>
+              </tr>
+            ) : flags.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-[#777971]">No feature flags configured.</td>
+              </tr>
+            ) : (
+              flags.map((flag) => (
+                <tr key={flag.key} className="border-t border-white/[0.03] items-center">
+                  <td className="px-4 py-3 font-mono text-xs">{flag.key}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => toggleFlag(flag.key, !flag.enabled)}
+                      disabled={toggling === flag.key}
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      {flag.enabled ? (
+                        <ToggleRight size={20} className="text-[#7cc58f]" />
+                      ) : (
+                        <ToggleLeft size={20} className="text-[#555750]" />
+                      )}
+                      <span className={flag.enabled ? 'text-[#7cc58f]' : 'text-[#787a73]'}>
+                        {flag.enabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-[#787a73]">{formatTime(flag.updatedAt)}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => deleteFlag(flag.key)}
+                      disabled={toggling === flag.key}
+                      className="text-red-400 hover:underline text-xs"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+const exportEntities = [
+  { value: 'orders', label: 'Orders' },
+  { value: 'products', label: 'Products' },
+  { value: 'customers', label: 'Customers' },
+  { value: 'staff', label: 'Staff' },
+  { value: 'shifts', label: 'Shifts' },
+  { value: 'payments', label: 'Payments' },
+  { value: 'stockMovements', label: 'Stock Movements' },
+  { value: 'auditLogs', label: 'Audit Logs' },
+] as const
+
+function DataExportView() {
+  const [exports, setExports] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [exportLoading, setExportLoading] = useState(false)
+  const [pagination, setPagination] = useState<{ page: number; limit: number; total: number; pages: number }>({
+    page: 1, limit: 20, total: 0, pages: 0,
+  })
+  const [form, setForm] = useState({
+    entity: 'orders' as (typeof exportEntities)[number]['value'],
+    format: 'json' as 'json' | 'csv',
+    dateFrom: '',
+    dateTo: '',
+  })
+
+  useEffect(() => {
+    fetchExports(1)
+  }, [])
+
+  const fetchExports = async (page = 1) => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/data-export?page=${page}&limit=${pagination.limit}`)
+      if (res.ok) {
+        const d = await res.json()
+        setExports(d.exports)
+        setPagination(d.pagination)
+      }
+    } catch (e) {
+      console.error('Failed to load exports:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const runExport = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setExportLoading(true)
+    try {
+      const res = await fetch('/api/data-export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entity: form.entity,
+          format: form.format,
+          dateFrom: form.dateFrom || undefined,
+          dateTo: form.dateTo || undefined,
+        }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to export')
+      const d = await res.json()
+      if (form.format === 'json') {
+        alert(`Export complete: ${d.count} records archived`)
+        fetchExports(1)
+      } else {
+        alert('CSV exported (download may have started)')
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to export')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
+  const downloadArchive = (archiveId: string) => {
+    window.open(`/api/data-export?archive=${archiveId}`, '_blank')
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="font-semibold mb-1 flex items-center gap-2">
+          <Truck size={16} className="text-[#d8a85b]" />
+          Data Export
+        </h3>
+        <p className="text-sm text-[#878981]">Export reports and data backups</p>
+      </div>
+
+      <form onSubmit={runExport} className="border border-white/[0.08] bg-[#111210] p-4 rounded-lg space-y-3 max-w-md">
+        <h4 className="font-semibold text-sm">New Export</h4>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <label className="block text-xs text-[#787a73] mb-1">Entity</label>
+            <select
+              value={form.entity}
+              onChange={(e) => setForm({ ...form, entity: e.target.value as any })}
+              className="w-full h-9 rounded-md border border-white/[0.1] bg-[#181a17] px-3 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+            >
+              {exportEntities.map((e) => (
+                <option key={e.value} value={e.value}>{e.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[#787a73] mb-1">Format</label>
+            <select
+              value={form.format}
+              onChange={(e) => setForm({ ...form, format: e.target.value as 'json' | 'csv' })}
+              className="w-full h-9 rounded-md border border-white/[0.1] bg-[#181a17] px-3 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+            >
+              <option value="json">JSON</option>
+              <option value="csv">CSV</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[#787a73] mb-1">Date From</label>
+            <input
+              type="date"
+              value={form.dateFrom}
+              onChange={(e) => setForm({ ...form, dateFrom: e.target.value })}
+              className="w-full h-9 rounded-md border border-white/[0.1] bg-[#181a17] px-3 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-[#787a73] mb-1">Date To</label>
+            <input
+              type="date"
+              value={form.dateTo}
+              onChange={(e) => setForm({ ...form, dateTo: e.target.value })}
+              className="w-full h-9 rounded-md border border-white/[0.1] bg-[#181a17] px-3 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+            />
+          </div>
+        </div>
+        <button
+          type="submit"
+          disabled={exportLoading}
+          className="w-full rounded-md bg-[#d8a85b] py-2 text-xs font-semibold text-[#1b1914] hover:bg-[#e4b96d] disabled:opacity-50"
+        >
+          {exportLoading ? 'Exporting...' : 'Run Export'}
+        </button>
+      </form>
+
+      <div className="border border-white/[0.08] bg-[#181a17] rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+          <h4 className="font-semibold text-sm">Recent Exports</h4>
+          <span className="text-xs text-[#787a73]">{pagination.total} total</span>
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
+              <th className="px-4 py-2 text-[10px] font-medium uppercase tracking-[0.1em]">Entity</th>
+              <th className="px-4 py-2 text-[10px] font-medium uppercase tracking-[0.1em]">Records</th>
+              <th className="px-4 py-2 text-[10px] font-medium uppercase tracking-[0.1em]">Format</th>
+              <th className="px-4 py-2 text-[10px] font-medium uppercase tracking-[0.1em]">Archived</th>
+              <th className="px-4 py-2 text-[10px] font-medium uppercase tracking-[0.1em]"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-6 text-center text-[#777971]">Loading...</td>
+              </tr>
+            ) : exports.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-6 text-center text-[#777971]">No exports yet.</td>
+              </tr>
+            ) : (
+              exports.map((exp) => (
+                <tr key={exp.id} className="border-t border-white/[0.03]">
+                  <td className="px-4 py-2">{exp.entity}</td>
+                  <td className="px-4 py-2 text-[#787a73]">{Array.isArray(exp.payload?.data) ? exp.payload.data.length : '—'}</td>
+                  <td className="px-4 py-2 text-[#787a73]">{exp.payload?.format ?? 'json'}</td>
+                  <td className="px-4 py-2 text-[#787a73]">{formatTime(exp.archivedAt)}</td>
+                  <td className="px-4 py-2">
+                    <button
+                      onClick={() => downloadArchive(exp.id)}
+                      className="text-xs text-[#d8a85b] hover:underline flex items-center gap-1"
+                    >
+                      <FileText size={12} />
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {pagination.total > 0 && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-[#787a73]">
+            {pagination.total} entries · Page {pagination.page} of {pagination.pages}
+          </span>
+          <div className="flex gap-2">
+            <button
+              disabled={pagination.page <= 1 || loading}
+              onClick={() => fetchExports(pagination.page - 1)}
+              className="flex items-center gap-1 rounded-md border border-white/[0.1] bg-[#181a17] px-3 py-1.5 text-xs text-[#a4a59e] hover:border-[#d8a85b]/50 hover:text-[#d8a85b] disabled:opacity-40"
+            >
+              <ChevronLeft size={13} />
+              Prev
+            </button>
+            <button
+              disabled={pagination.page >= pagination.pages || loading}
+              onClick={() => fetchExports(pagination.page + 1)}
+              className="flex items-center gap-1 rounded-md border border-white/[0.1] bg-[#181a17] px-3 py-1.5 text-xs text-[#a4a59e] hover:border-[#d8a85b]/50 hover:text-[#d8a85b] disabled:opacity-40"
+            >
+              Next
+              <ChevronRight size={13} />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ReportsView({ data }: { data: DashboardData }) {
-  const [activeTab, setActiveTab] = useState<'daily' | 'products' | 'reconciliation'>('daily')
+  const [activeTab, setActiveTab] = useState<'daily' | 'products' | 'reconciliation' | 'staff' | 'inventory' | 'customers'>('daily')
   const [dailyReport, setDailyReport] = useState<any>(null)
   const [productsReport, setProductsReport] = useState<any>(null)
   const [reconReport, setReconReport] = useState<any>(null)
+  const [staffReport, setStaffReport] = useState<any>(null)
+  const [inventoryReport, setInventoryReport] = useState<any>(null)
+  const [customersReport, setCustomersReport] = useState<any>(null)
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])
   const [loading, setLoading] = useState(false)
 
@@ -1625,9 +2482,18 @@ function ReportsView({ data }: { data: DashboardData }) {
         } else if (activeTab === 'products') {
           const res = await fetch('/api/reports/products?days=30')
           if (res.ok) setProductsReport(await res.json())
-        } else {
+        } else if (activeTab === 'reconciliation') {
           const res = await fetch(`/api/reports/reconciliation?date=${reportDate}`)
           if (res.ok) setReconReport(await res.json())
+        } else if (activeTab === 'staff') {
+          const res = await fetch('/api/reports/staff?days=30')
+          if (res.ok) setStaffReport(await res.json())
+        } else if (activeTab === 'inventory') {
+          const res = await fetch('/api/reports/inventory?days=30')
+          if (res.ok) setInventoryReport(await res.json())
+        } else if (activeTab === 'customers') {
+          const res = await fetch('/api/reports/customers?days=90')
+          if (res.ok) setCustomersReport(await res.json())
         }
       } catch (e) {
         console.error('Failed to load report:', e)
@@ -1859,6 +2725,272 @@ function ReportsView({ data }: { data: DashboardData }) {
     )
   }
 
+  const renderStaff = () => {
+    if (!staffReport) return <div className="text-center py-8 text-[#777971]">Loading...</div>
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-4">
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Total Staff</p>
+            <p className="mt-1 text-2xl font-semibold">{staffReport.staff.length}</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Total Sales</p>
+            <p className="mt-1 text-2xl font-semibold">{formatKES(staffReport.staff.reduce((sum: number, s: any) => sum + parseFloat(s.totalSales), 0))}</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Total Orders</p>
+            <p className="mt-1 text-2xl font-semibold">{staffReport.staff.reduce((sum: number, s: any) => sum + s.orderCount, 0)}</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Total Hours</p>
+            <p className="mt-1 text-2xl font-semibold">{staffReport.staff.reduce((sum: number, s: any) => sum + parseFloat(s.hours), 0).toFixed(1)}h</p>
+          </div>
+        </div>
+        <div className="border border-white/[0.08] bg-[#181a17] p-4">
+          <h3 className="font-semibold mb-3">Staff Performance (Last {staffReport.periodDays} Days)</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
+                  <th className="pb-2">Staff</th>
+                  <th className="pb-2">Role</th>
+                  <th className="pb-2 text-right">Sales</th>
+                  <th className="pb-2 text-right">Orders</th>
+                  <th className="pb-2 text-right">Avg Order</th>
+                  <th className="pb-2 text-right">Hours</th>
+                  <th className="pb-2 text-right">Cash</th>
+                  <th className="pb-2 text-right">Card</th>
+                  <th className="pb-2 text-right">Pesapal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staffReport.staff.map((s: any) => (
+                  <tr key={s.id} className="border-b border-white/[0.03]">
+                    <td className="py-2">{s.name}</td>
+                    <td className="py-2 text-[#787a73]">{s.role}</td>
+                    <td className="py-2 text-right">{formatKES(s.totalSales)}</td>
+                    <td className="py-2 text-right">{s.orderCount}</td>
+                    <td className="py-2 text-right">{formatKES(s.avgOrderValue)}</td>
+                    <td className="py-2 text-right">{s.hours}h</td>
+                    <td className="py-2 text-right">{formatKES(s.cashSales)}</td>
+                    <td className="py-2 text-right">{formatKES(s.cardSales)}</td>
+                    <td className="py-2 text-right">{formatKES(s.pesapalSales)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderInventory = () => {
+    if (!inventoryReport) return <div className="text-center py-8 text-[#777971]">Loading...</div>
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Products</p>
+            <p className="mt-1 text-2xl font-semibold">{inventoryReport.summary.totalProducts}</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Stock Value</p>
+            <p className="mt-1 text-2xl font-semibold">{formatKES(inventoryReport.summary.totalStockValue)}</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Stock IN</p>
+            <p className="mt-1 text-2xl font-semibold">{inventoryReport.summary.inMovements} ({inventoryReport.summary.inQuantity})</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Stock OUT</p>
+            <p className="mt-1 text-2xl font-semibold">{inventoryReport.summary.outMovements} ({inventoryReport.summary.outQuantity})</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4 border-yellow-500/30">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Low Stock</p>
+            <p className="mt-1 text-2xl font-semibold text-yellow-400">{inventoryReport.summary.lowStockCount}</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4 border-red-500/30">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Out of Stock</p>
+            <p className="mt-1 text-2xl font-semibold text-red-400">{inventoryReport.summary.outOfStockCount}</p>
+          </div>
+        </div>
+        <div className="border border-white/[0.08] bg-[#181a17] p-4">
+          <h3 className="font-semibold mb-3">Product Stock Levels</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
+                  <th className="pb-2">Product</th>
+                  <th className="pb-2">Category</th>
+                  <th className="pb-2 text-right">Stock</th>
+                  <th className="pb-2 text-right">Reorder</th>
+                  <th className="pb-2 text-right">Cost</th>
+                  <th className="pb-2 text-right">Price</th>
+                  <th className="pb-2 text-right">Stock Value</th>
+                  <th className="pb-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inventoryReport.products.map((p: any) => (
+                  <tr key={p.id} className="border-b border-white/[0.03]">
+                    <td className="py-2">{p.name}</td>
+                    <td className="py-2 text-[#787a73]">{p.category || '-'}</td>
+                    <td className="py-2 text-right">{parseFloat(p.stock).toFixed(3)}</td>
+                    <td className="py-2 text-right">{parseFloat(p.reorderAt).toFixed(3)}</td>
+                    <td className="py-2 text-right">{formatKES(p.cost)}</td>
+                    <td className="py-2 text-right">{formatKES(p.price)}</td>
+                    <td className="py-2 text-right">{formatKES(p.stockValue)}</td>
+                    <td className="py-2">
+                      <span className={`px-2 py-0.5 text-xs rounded ${p.status === 'OUT' ? 'bg-red-500/20 text-red-400' : p.status === 'LOW' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400'}`}>
+                        {p.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="border border-white/[0.08] bg-[#181a17] p-4">
+          <h3 className="font-semibold mb-3">Recent Stock Movements</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
+                  <th className="pb-2">Product</th>
+                  <th className="pb-2">Category</th>
+                  <th className="pb-2">Type</th>
+                  <th className="pb-2 text-right">Qty</th>
+                  <th className="pb-2">Reason</th>
+                  <th className="pb-2">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inventoryReport.stockMovements.map((m: any) => (
+                  <tr key={m.id} className="border-b border-white/[0.03]">
+                    <td className="py-2">{m.product}</td>
+                    <td className="py-2 text-[#787a73]">{m.category || '-'}</td>
+                    <td className="py-2">
+                      <span className={`px-2 py-0.5 text-xs rounded ${m.type === 'IN' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                        {m.type}
+                      </span>
+                    </td>
+                    <td className="py-2 text-right">{m.quantity}</td>
+                    <td className="py-2 text-[#787a73]">{m.reason}</td>
+                    <td className="py-2 text-[#787a73]">{formatTime(m.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderCustomers = () => {
+    if (!customersReport) return <div className="text-center py-8 text-[#777971]">Loading...</div>
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-5">
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Total Customers</p>
+            <p className="mt-1 text-2xl font-semibold">{customersReport.summary.totalCustomers}</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Active Customers</p>
+            <p className="mt-1 text-2xl font-semibold">{customersReport.summary.activeCustomers}</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">New ({customersReport.periodDays}d)</p>
+            <p className="mt-1 text-2xl font-semibold">{customersReport.summary.newCustomers}</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Avg Spend</p>
+            <p className="mt-1 text-2xl font-semibold">{formatKES(customersReport.summary.avgSpend)}</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Avg Visits</p>
+            <p className="mt-1 text-2xl font-semibold">{customersReport.summary.avgVisits}</p>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <h3 className="font-semibold mb-3">Visit Frequency</h3>
+            <div className="space-y-2">
+              {customersReport.visitFrequency.map((v: any) => (
+                <div key={v.frequency} className="flex items-center justify-between py-2 border-b border-white/[0.03]">
+                  <span className="text-sm">{v.frequency}</span>
+                  <span className="font-semibold">{v.customers} customers</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <h3 className="font-semibold mb-3">Top 10 Customers</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
+                    <th className="pb-2">Customer</th>
+                    <th className="pb-2">Phone</th>
+                    <th className="pb-2 text-right">Visits</th>
+                    <th className="pb-2 text-right">Total Spend</th>
+                    <th className="pb-2">Last Visit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {customersReport.topCustomers.map((c: any) => (
+                    <tr key={c.id} className="border-b border-white/[0.03]">
+                      <td className="py-2">{c.name}</td>
+                      <td className="py-2 text-[#787a73]">{c.phone || '-'}</td>
+                      <td className="py-2 text-right">{c.visitCount}</td>
+                      <td className="py-2 text-right">{formatKES(c.totalSpent)}</td>
+                      <td className="py-2 text-[#787a73]">{c.lastVisit ? formatTime(c.lastVisit) : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div className="border border-white/[0.08] bg-[#181a17] p-4">
+          <h3 className="font-semibold mb-3">All Customers</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
+                  <th className="pb-2">Customer</th>
+                  <th className="pb-2">Phone</th>
+                  <th className="pb-2">Email</th>
+                  <th className="pb-2 text-right">Visits</th>
+                  <th className="pb-2 text-right">Total Spend</th>
+                  <th className="pb-2">First Visit</th>
+                  <th className="pb-2">Last Visit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customersReport.allCustomers.map((c: any) => (
+                  <tr key={c.id} className="border-b border-white/[0.03]">
+                    <td className="py-2">{c.name}</td>
+                    <td className="py-2 text-[#787a73]">{c.phone || '-'}</td>
+                    <td className="py-2 text-[#787a73]">{c.email || '-'}</td>
+                    <td className="py-2 text-right">{c.visitCount}</td>
+                    <td className="py-2 text-right">{formatKES(c.totalSpent)}</td>
+                    <td className="py-2 text-[#787a73]">{c.firstVisit ? formatTime(c.firstVisit) : '-'}</td>
+                    <td className="py-2 text-[#787a73]">{c.lastVisit ? formatTime(c.lastVisit) : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1885,16 +3017,19 @@ function ReportsView({ data }: { data: DashboardData }) {
           </button>
         </div>
       </div>
-      <div className="flex gap-1 border-b border-white/[0.08]">
+      <div className="flex gap-1 border-b border-white/[0.08] overflow-x-auto">
         {[
           { id: 'daily', label: 'Daily Summary', icon: CalendarDays },
           { id: 'products', label: 'Product Performance', icon: Package },
           { id: 'reconciliation', label: 'Reconciliation', icon: CreditCard },
+          { id: 'staff', label: 'Staff Performance', icon: Users },
+          { id: 'inventory', label: 'Inventory Report', icon: Package },
+          { id: 'customers', label: 'Customer Insights', icon: UserCog },
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-4 py-2 text-sm transition ${
+            className={`flex items-center gap-2 px-4 py-2 text-sm whitespace-nowrap transition ${
               activeTab === tab.id
                 ? 'text-[#d8a85b] border-b-2 border-[#d8a85b]'
                 : 'text-[#787a73] hover:text-white'
@@ -1908,7 +3043,12 @@ function ReportsView({ data }: { data: DashboardData }) {
       {loading ? (
         <div className="text-center py-8 text-[#777971]">Loading report...</div>
       ) : (
-        activeTab === 'daily' ? renderDaily() : activeTab === 'products' ? renderProducts() : renderReconciliation()
+        activeTab === 'daily' ? renderDaily() :
+        activeTab === 'products' ? renderProducts() :
+        activeTab === 'reconciliation' ? renderReconciliation() :
+        activeTab === 'staff' ? renderStaff() :
+        activeTab === 'inventory' ? renderInventory() :
+        renderCustomers()
       )}
     </div>
   )
@@ -2475,7 +3615,7 @@ function SettingsView() {
                   </label>
                 </div>
               </div>
-              <button type="submit" disabled={taxSaving} className="px-4 py-2 text-sm bg-[#d8a85b] text-[#1b1914] font-medium rounded hover:bg-[#e4b96d] disabled:opacity-50">
+              <button type="submit" disabled={!!taxSaving} className="px-4 py-2 text-sm bg-[#d8a85b] text-[#1b1914] font-medium rounded hover:bg-[#e4b96d] disabled:opacity-50">
                 {taxSaving ? 'Adding...' : 'Add Tax Rule'}
               </button>
             </form>
@@ -2534,7 +3674,7 @@ function SettingsView() {
                   </label>
                 </div>
               </div>
-              <button type="submit" disabled={discountSaving} className="px-4 py-2 text-sm bg-[#d8a85b] text-[#1b1914] font-medium rounded hover:bg-[#e4b96d] disabled:opacity-50">
+              <button type="submit" disabled={!!discountSaving} className="px-4 py-2 text-sm bg-[#d8a85b] text-[#1b1914] font-medium rounded hover:bg-[#e4b96d] disabled:opacity-50">
                 {discountSaving ? 'Adding...' : 'Add Discount Rule'}
               </button>
             </form>
@@ -2591,7 +3731,7 @@ function SettingsView() {
                   <input type="checkbox" checked={printerForm.active} onChange={(e) => setPrinterForm({ ...printerForm, active: e.target.checked })} className="rounded border-white/[0.2] bg-[#181a17] text-[#d8a85b] focus:ring-[#d8a85b]" /> Active
                 </label>
               </div>
-              <button type="submit" disabled={printerSaving} className="px-4 py-2 text-sm bg-[#d8a85b] text-[#1b1914] font-medium rounded hover:bg-[#e4b96d] disabled:opacity-50">
+              <button type="submit" disabled={!!printerSaving} className="px-4 py-2 text-sm bg-[#d8a85b] text-[#1b1914] font-medium rounded hover:bg-[#e4b96d] disabled:opacity-50">
                 {printerSaving ? 'Adding...' : 'Add Printer'}
               </button>
             </form>
