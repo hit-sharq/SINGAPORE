@@ -42,7 +42,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased" suppressHydrationWarning>
-        <ClerkProvider dynamic>{children}</ClerkProvider>
+        <ClerkProvider dynamic signInUrl="/sign-in" signUpUrl="/sign-up">{children}</ClerkProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

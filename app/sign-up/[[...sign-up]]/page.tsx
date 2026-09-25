@@ -1,35 +1,47 @@
 'use client'
 
-import { useState } from 'react'
-import { useSignUp } from '@clerk/clerk-react'
+import { useState, type FormEvent } from 'react'
+import { useSignUp } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, Loader2, Spade } from 'lucide-react'
+import { Eye, EyeOff, Loader2, LockKeyhole, Mail, UserRound } from 'lucide-react'
+import AuthShell from '@/components/auth-shell'
+
+type AuthStatus = 'idle' | 'loading' | 'error'
+type SignUpStep = 'details' | 'verify'
 
 export default function SignUpPage() {
-  const { signUp, setActive, isLoaded } = useSignUp()
+  const { signUp, isLoaded } = useSignUp()
   const router = useRouter()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [verificationCode, setVerificationCode] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [status, setStatus] = useState<AuthStatus>('idle')
   const [error, setError] = useState('')
-  const [step, setStep] = useState<'details' | 'verify'>('details')
+  const [step, setStep] = useState<SignUpStep>('details')
 
   const handleResend = async () => {
-    if (!signUp) return
+    if (!signUp || status === 'loading') return
+    setStatus('loading')
+    setError('')
+
     try {
       await signUp.prepareEmailAddressVerification()
-    } catch (err) {
-      setError('Failed to resend code')
+      setStatus('idle')
+    } catch (resendError: unknown) {
+      const message = resendError instanceof Error ? resendError.message : 'Failed to resend code'
+      setError(message)
+      setStatus('error')
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
     if (!signUp || status === 'loading') return
+
     setStatus('loading')
     setError('')
 
@@ -41,24 +53,34 @@ export default function SignUpPage() {
           emailAddress: email,
           password,
         })
+
         if (result.status === 'complete') {
           router.push('/')
           router.refresh()
-        } else if (result.status === 'missing_requirements') {
+          return
+        }
+
+        if (result.status === 'missing_requirements') {
           await signUp.prepareEmailAddressVerification()
           setStep('verify')
+          setStatus('idle')
+          return
         }
+
+        setError('We need a little more information to finish creating your account.')
       } else {
-        const result = await signUp.attemptEmailAddressVerification({ code: password })
+        const result = await signUp.attemptEmailAddressVerification({ code: verificationCode })
         if (result.status === 'complete') {
           router.push('/')
           router.refresh()
-        } else {
-          setError('Invalid verification code')
+          return
         }
+        setError('That verification code is not valid. Please check it and try again.')
       }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : step === 'details' ? 'Sign up failed' : 'Verification failed'
+
+      setStatus('error')
+    } catch (submissionError: unknown) {
+      const message = submissionError instanceof Error ? submissionError.message : step === 'details' ? 'Sign up failed' : 'Verification failed'
       setError(message)
       setStatus('error')
     }
@@ -66,200 +88,166 @@ export default function SignUpPage() {
 
   if (!isLoaded) {
     return (
-      <main className="min-h-dvh bg-[#111210] flex items-center justify-center">
-        <Loader2 className="size-8 text-[#d4a85a] animate-spin" />
+      <main className="auth-bg flex min-h-dvh items-center justify-center text-[#d8b76e]">
+        <Loader2 className="size-7 animate-spin" aria-label="Loading sign up" />
       </main>
     )
   }
 
   return (
-    <main className="min-h-dvh bg-[#111210] text-[#f5f1e8]">
-      <div className="grid min-h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(440px,0.85fr)]">
-        <section className="relative hidden overflow-hidden border-r border-white/[0.06] bg-[#171814] lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16">
-          <div className="absolute -right-32 bottom-1/2 -translate-y-1/2 size-96 rounded-full bg-[#d4a85a]/5 blur-3xl" aria-hidden="true" />
-          <div className="relative z-10">
-            <Link href="/" className="inline-flex items-center gap-3 text-sm font-semibold tracking-[0.18em] text-[#f5f1e8] uppercase mb-12">
-              <span className="grid size-10 place-items-center rounded-xl bg-[#d4a85a] text-base font-bold text-[#171814]">
-                <Spade size={22} fill="currentColor" />
-              </span>
-              Singapore Club
-            </Link>
-          </div>
-          <div className="relative z-10 max-w-xl">
-            <p className="mb-5 text-xs font-medium tracking-[0.25em] text-[#d4a85a] uppercase">Your team, in sync</p>
-            <h1 className="text-5xl font-semibold leading-[1.04] tracking-[-0.04em] text-[#f5f1e8] xl:text-6xl">Make the busy nights feel simple.</h1>
-            <p className="mt-6 max-w-md text-base leading-7 text-[#a8a399]">Join your club workspace to keep service moving, stock visible, and every handoff clear.</p>
-          </div>
-          <div className="relative z-10 mt-12 flex items-center gap-3 text-xs text-[#77766f]">
-            <div className="h-px w-24 bg-white/10" />
-            <span>Singapore Club Operations · Private workspace</span>
-          </div>
-        </section>
+    <AuthShell
+      mode="sign-up"
+      eyebrow="Your workspace awaits"
+      title={step === 'details' ? 'Create your account.' : 'Verify your email.'}
+      description={step === 'details' ? 'Join the team and keep every shift in sync.' : 'Enter the six-digit code we sent to your inbox.'}
+    >
+      <div className="space-y-5">
+        {error && <div className="auth-error" role="alert">{error}</div>}
 
-        <section className="flex min-h-dvh items-center justify-center px-5 py-10 sm:px-8">
-          <div className="w-full max-w-[420px]">
-            <div className="mb-8 lg:hidden">
-              <Link href="/" className="inline-flex items-center gap-3 text-sm font-semibold tracking-[0.18em] text-[#f5f1e8] uppercase">
-                <span className="grid size-10 place-items-center rounded-xl bg-[#d4a85a] text-base font-bold text-[#171814]">
-                  <Spade size={22} fill="currentColor" />
-                </span>
-                Singapore Club
-              </Link>
-            </div>
+        {step === 'verify' && (
+          <div className="auth-verify-banner">
+            <Mail size={17} aria-hidden="true" />
+            <span>Code sent to <strong>{email}</strong></span>
+          </div>
+        )}
 
-            <div className="space-y-6">
-              <div className="text-center">
-                <h2 className="text-2xl font-semibold tracking-tight text-[#f5f1e8]">{step === 'details' ? 'Create your account' : 'Verify your email'}</h2>
-                <p className="mt-2 text-sm text-[#a8a399]">{step === 'details' ? 'Get started with Singapore Club' : 'Enter the code sent to your email'}</p>
+        <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+          {step === 'details' ? (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="auth-label" htmlFor="firstName">First name</label>
+                  <div className="relative">
+                    <UserRound className="auth-field-icon" size={17} aria-hidden="true" />
+                    <input
+                      id="firstName"
+                      name="firstName"
+                      type="text"
+                      autoComplete="given-name"
+                      value={firstName}
+                      onChange={(event) => setFirstName(event.target.value)}
+                      required
+                      disabled={status === 'loading'}
+                      className="auth-input auth-input-with-icon"
+                      placeholder="Alex"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="auth-label" htmlFor="lastName">Last name</label>
+                  <div className="relative">
+                    <UserRound className="auth-field-icon" size={17} aria-hidden="true" />
+                    <input
+                      id="lastName"
+                      name="lastName"
+                      type="text"
+                      autoComplete="family-name"
+                      value={lastName}
+                      onChange={(event) => setLastName(event.target.value)}
+                      required
+                      disabled={status === 'loading'}
+                      className="auth-input auth-input-with-icon"
+                      placeholder="Kamau"
+                    />
+                  </div>
+                </div>
               </div>
 
-              {error && (
-                <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-sm text-red-300" role="alert">
-                  {error}
+              <div>
+                <label className="auth-label" htmlFor="email">Work email</label>
+                <div className="relative">
+                  <Mail className="auth-field-icon" size={17} aria-hidden="true" />
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    required
+                    disabled={status === 'loading'}
+                    className="auth-input auth-input-with-icon"
+                    placeholder="you@club.com"
+                  />
                 </div>
-              )}
+              </div>
 
-              <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-                {step === 'details' ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="firstName" className="block text-xs font-medium uppercase tracking-[0.14em] text-[#a8a399] mb-2">
-                          First name
-                        </label>
-                        <input
-                          id="firstName"
-                          type="text"
-                          autoComplete="given-name"
-                          value={firstName}
-                          onChange={(e) => setFirstName(e.target.value)}
-                          required
-                          disabled={status === 'loading'}
-                          className="w-full h-12 rounded-xl border border-white/10 bg-[#1b1c19] text-[#f5f1e8] px-4 text-sm placeholder:text-[#666860] outline-none transition-all focus:border-[#d4a85a] focus:ring-2 focus:ring-[#d4a85a]/30 disabled:opacity-50"
-                          placeholder="Alex"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="lastName" className="block text-xs font-medium uppercase tracking-[0.14em] text-[#a8a399] mb-2">
-                          Last name
-                        </label>
-                        <input
-                          id="lastName"
-                          type="text"
-                          autoComplete="family-name"
-                          value={lastName}
-                          onChange={(e) => setLastName(e.target.value)}
-                          required
-                          disabled={status === 'loading'}
-                          className="w-full h-12 rounded-xl border border-white/10 bg-[#1b1c19] text-[#f5f1e8] px-4 text-sm placeholder:text-[#666860] outline-none transition-all focus:border-[#d4a85a] focus:ring-2 focus:ring-[#d4a85a]/30 disabled:opacity-50"
-                          placeholder="Kamau"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label htmlFor="email" className="block text-xs font-medium uppercase tracking-[0.14em] text-[#a8a399] mb-2">
-                        Email
-                      </label>
-                      <input
-                        id="email"
-                        type="email"
-                        autoComplete="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        disabled={status === 'loading'}
-                        className="w-full h-12 rounded-xl border border-white/10 bg-[#1b1c19] text-[#f5f1e8] px-4 text-sm placeholder:text-[#666860] outline-none transition-all focus:border-[#d4a85a] focus:ring-2 focus:ring-[#d4a85a]/30 disabled:opacity-50"
-                        placeholder="you@club.com"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="password" className="block text-xs font-medium uppercase tracking-[0.14em] text-[#a8a399] mb-2">
-                        Password
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="password"
-                          type={showPassword ? 'text' : 'password'}
-                          autoComplete="new-password"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          required
-                          minLength={8}
-                          disabled={status === 'loading'}
-                          className="w-full h-12 rounded-xl border border-white/10 bg-[#1b1c19] text-[#f5f1e8] px-4 text-sm placeholder:text-[#666860] outline-none transition-all focus:border-[#d4a85a] focus:ring-2 focus:ring-[#d4a85a]/30 disabled:opacity-50 disabled:cursor-not-allowed pr-12"
-                          placeholder="••••••••"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 text-[#77766f] hover:text-[#f5f1e8] transition-colors"
-                          aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        >
-                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </button>
-                      </div>
-                      <p className="mt-1.5 text-xs text-[#77766f]">At least 8 characters</p>
-                    </div>
-                  </>
-                ) : (
-                  <div>
-                    <label htmlFor="code" className="block text-xs font-medium uppercase tracking-[0.14em] text-[#a8a399] mb-2">
-                      Verification code
-                    </label>
-                    <input
-                      id="code"
-                      type="text"
-                      autoComplete="one-time-code"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      maxLength={6}
-                      disabled={status === 'loading'}
-                      className="w-full h-12 rounded-xl border border-white/10 bg-[#1b1c19] text-[#f5f1e8] px-4 text-sm placeholder:text-[#666860] outline-none transition-all focus:border-[#d4a85a] focus:ring-2 focus:ring-[#d4a85a]/30 disabled:opacity-50 text-center tracking-widest text-lg"
-                      placeholder="000000"
-                    />
-                    <p className="mt-1.5 text-center text-xs text-[#77766f]">Check your email for the 6-digit code</p>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={status === 'loading'}
-                  className="w-full h-12 rounded-xl bg-[#d4a85a] text-sm font-semibold text-[#171814] shadow-none hover:bg-[#e1b96d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {status === 'loading' ? (
-                    <>
-                      <Loader2 className="size-5 animate-spin" />
-                      {step === 'details' ? 'Creating account...' : 'Verifying...'}
-                    </>
-                  ) : (
-                    step === 'details' ? 'Create account' : 'Verify & continue'
-                  )}
-                </button>
-              </form>
-
-              {step === 'details' && (
-                <p className="text-center text-sm text-[#a8a399]">
-                  Already have access?{' '}
-                  <Link href="/sign-in" className="text-[#d4a85a] hover:text-[#e1b96d] font-medium transition-colors">
-                    Sign in
-                  </Link>
-                </p>
-              )}
-              {step === 'verify' && (
-                <p className="text-center text-sm text-[#a8a399]">
-                  Didn't receive it?{' '}
-                  <button type="button" onClick={handleResend} className="text-[#d4a85a] hover:text-[#e1b96d] font-medium transition-colors">
-                    Resend code
+              <div>
+                <label className="auth-label" htmlFor="password">Create a password</label>
+                <div className="relative">
+                  <LockKeyhole className="auth-field-icon" size={17} aria-hidden="true" />
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    required
+                    minLength={8}
+                    disabled={status === 'loading'}
+                    className="auth-input auth-input-with-icon auth-input-with-action"
+                    placeholder="At least 8 characters"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((visible) => !visible)}
+                    className="auth-input-action"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
                   </button>
-                </p>
-              )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="auth-label" htmlFor="verificationCode">Verification code</label>
+              <input
+                id="verificationCode"
+                name="verificationCode"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={verificationCode}
+                onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                required
+                maxLength={6}
+                disabled={status === 'loading'}
+                className="auth-input auth-code-input"
+                placeholder="000000"
+              />
+              <p className="mt-2 text-center text-xs text-white/35">We sent a six-digit code to your email.</p>
             </div>
+          )}
+
+          <button type="submit" disabled={status === 'loading'} className="auth-submit">
+            {status === 'loading' ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                {step === 'details' ? 'Creating account...' : 'Verifying...'}
+              </>
+            ) : (
+              <>
+                {step === 'details' ? 'Create account' : 'Verify and continue'}
+                <span aria-hidden="true">→</span>
+              </>
+            )}
+          </button>
+        </form>
+
+        {step === 'details' ? (
+          <p className="auth-switch-copy">
+            Already have access? <Link href="/sign-in" className="auth-link">Sign in <span aria-hidden="true">→</span></Link>
+          </p>
+        ) : (
+          <div className="flex items-center justify-between gap-3 text-center text-sm text-white/45">
+            <button type="button" onClick={() => { setStep('details'); setPassword(''); setVerificationCode(''); setError('') }} className="auth-link">Back to details</button>
+            <span>Didn&apos;t receive it?</span>
+            <button type="button" onClick={handleResend} disabled={status === 'loading'} className="auth-link">Resend code</button>
           </div>
-        </section>
+        )}
       </div>
-    </main>
+    </AuthShell>
   )
 }
