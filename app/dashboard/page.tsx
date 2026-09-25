@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useClerk } from '@clerk/nextjs'
 import {
@@ -4514,7 +4515,7 @@ export default function Page() {
   return (
     <main className="min-h-screen bg-[#111210] text-[#f3f0e9]">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-[228px] flex-col border-r border-white/[0.07] bg-[#171815] lg:flex">
-        <div className="flex h-[76px] items-center gap-3 border-b border-white/[0.07] px-6">
+        <Link href="/" className="flex h-[76px] items-center gap-3 border-b border-white/[0.07] px-6">
           <div className="flex size-9 items-center justify-center rounded-[10px] bg-[#d8a85b] text-[#171815]">
             <Spade size={19} fill="currentColor" />
           </div>
@@ -4522,7 +4523,7 @@ export default function Page() {
             <p className="text-[15px] font-semibold tracking-[0.2em]">SINGAPORE</p>
             <p className="mt-0.5 text-[9px] uppercase tracking-[0.23em] text-[#898a82]">Club operations</p>
           </div>
-        </div>
+        </Link>
         <div className="px-3 pt-7">
           <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#71736c]">Workspace</p>
           <nav className="flex flex-col gap-1">
