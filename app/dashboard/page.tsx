@@ -4203,6 +4203,7 @@ export default function Page() {
 
   const [activeNav, setActiveNav] = useState('Overview')
   const [activeCategory, setActiveCategory] = useState('All items')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [showSale, setShowSale] = useState(false)
@@ -4533,9 +4534,21 @@ export default function Page() {
       <section className="lg:pl-[228px]">
         <header className="flex h-[76px] items-center justify-between border-b border-white/[0.07] px-5 sm:px-8">
           <div className="flex items-center gap-3">
-            <button className="text-[#92948c] lg:hidden">
-              <Menu size={21} />
+            <button
+              className="text-white lg:hidden p-2 bg-white/10 rounded"
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              <Menu size={24} />
             </button>
+            {activeNav !== 'Overview' && (
+              <button
+                onClick={() => setActiveNav('Overview')}
+                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium text-[#a4a59e] hover:bg-white/[0.04] hover:text-white transition lg:hidden"
+              >
+                <ChevronLeft size={15} />
+                Back
+              </button>
+            )}
             <div>
               <p className="text-[11px] uppercase tracking-[0.16em] text-[#73756f]">{formatDate()}</p>
               <h1 className="mt-1 text-xl font-semibold tracking-tight">
@@ -4572,7 +4585,77 @@ export default function Page() {
           </div>
         </header>
 
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMobileMenuOpen(false)}>
+            <div className="absolute inset-y-0 left-0 w-[280px] max-w-full bg-[#171815] border-r border-white/[0.07] shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex h-[76px] items-center justify-between border-b border-white/[0.07] px-6">
+                <div className="flex size-9 items-center justify-center rounded-[10px] bg-[#d8a85b] text-[#171815]">
+                  <Spade size={19} fill="currentColor" />
+                </div>
+                <button onClick={() => setMobileMenuOpen(false)} className="text-[#92948c]">
+                  <X size={22} />
+                </button>
+              </div>
+              <div className="px-3 pt-7">
+                <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#71736c]">Workspace</p>
+                <nav className="flex flex-col gap-1">
+                  {allNavItems.map(({ label, icon: Icon }) => (
+                    <button
+                      key={label}
+                      onClick={() => { setActiveNav(label); setMobileMenuOpen(false); }}
+                      className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition ${
+                        activeNav === label
+                          ? 'bg-[#d8a85b]/12 font-medium text-[#e5ba72]'
+                          : 'text-[#a4a59e] hover:bg-white/[0.04] hover:text-white'
+                      }`}
+                    >
+                      <Icon size={17} strokeWidth={1.7} />
+                      {label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+              <div className="mt-auto border-t border-white/[0.07] p-4">
+                <button
+                  onClick={() => { setActiveNav('Settings'); setMobileMenuOpen(false); }}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04] hover:text-white"
+                >
+                  <Settings size={17} />
+                  Settings
+                </button>
+                <button
+                  onClick={() => { signOut(); setMobileMenuOpen(false); }}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04]"
+                >
+                  <LogOut size={17} />
+                  Sign Out
+                </button>
+                <div className="mt-4 flex items-center gap-3 border-t border-white/[0.07] pt-4">
+                  <div className="flex size-8 items-center justify-center rounded-full bg-[#8a6655] text-xs font-semibold">
+                    {getInitials(data.staff.name)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium">{data.staff.name}</p>
+                    <p className="text-[10px] text-[#777971]">{roleLabels[data.staff.role] ?? data.staff.role}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="mx-auto max-w-[1500px] p-5 sm:p-8">
+          {activeNav !== 'Overview' && (
+            <div className="mb-6">
+              <button
+                onClick={() => setActiveNav('Overview')}
+                className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium text-[#a4a59e] bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.04] hover:text-white hover:border-white/[0.1] transition"
+              >
+                <ChevronLeft size={14} />
+                Back to Overview
+              </button>
+            </div>
+          )}
           {renderView()}
         </div>
         <OrderDetailModal order={selectedOrder} onClose={closeOrderDetail} onRefresh={refreshDashboard} />
