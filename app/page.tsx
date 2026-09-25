@@ -1,9 +1,12 @@
 import Link from 'next/link'
-import { ArrowUpRight, Check, Play, Sparkles } from 'lucide-react'
+import { ArrowUpRight, Check, Play, Sparkles, Menu, X } from 'lucide-react'
+import { useState } from 'react'
 
 const benefits = ['One clear source of truth', 'Built for focused teams', 'Ready when you are']
 
 export default function HomePage() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
   return (
     <main className="min-h-screen overflow-hidden bg-background text-foreground">
       <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-6 lg:px-10">
@@ -20,7 +23,35 @@ export default function HomePage() {
           <Link href="/sign-in" className="rounded-full px-2 py-2 text-xs text-muted-foreground transition hover:bg-secondary hover:text-foreground sm:px-4 sm:text-sm">Sign in</Link>
           <Link href="/sign-up" className="rounded-full bg-primary px-4 py-2.5 font-medium text-primary-foreground transition hover:-translate-y-0.5 hover:shadow-lg">Get started <ArrowUpRight className="ml-1 inline size-4" /></Link>
         </div>
+        <button
+          className="md:hidden p-2 text-muted-foreground hover:text-foreground"
+          onClick={() => setMobileMenuOpen(true)}
+        >
+          <Menu size={24} />
+        </button>
       </nav>
+
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden" onClick={() => setMobileMenuOpen(false)}>
+          <div className="absolute inset-y-0 right-0 w-[280px] max-w-full bg-card border-l border-border shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex h-16 items-center justify-between border-b border-border px-6">
+              <span className="font-semibold">Singapore Club</span>
+              <button onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-secondary rounded">
+                <X size={22} />
+              </button>
+            </div>
+            <nav className="px-6 py-6 space-y-4">
+              <a href="#overview" className="block text-lg font-medium transition hover:text-primary" onClick={() => setMobileMenuOpen(false)}>Overview</a>
+              <a href="#principles" className="block text-lg font-medium transition hover:text-primary" onClick={() => setMobileMenuOpen(false)}>Principles</a>
+              <a href="#access" className="block text-lg font-medium transition hover:text-primary" onClick={() => setMobileMenuOpen(false)}>Access</a>
+              <div className="pt-4 border-t border-border flex flex-col gap-3">
+                <Link href="/sign-in" className="rounded-full px-4 py-3 text-center text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground transition">Sign in</Link>
+                <Link href="/sign-up" className="rounded-full bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground hover:-translate-y-0.5 hover:shadow-lg transition">Get started</Link>
+              </div>
+            </nav>
+          </div>
+        </div>
+      )}
 
       <section id="overview" className="relative mx-auto grid max-w-7xl items-center gap-14 px-6 pb-24 pt-16 lg:grid-cols-[1.05fr_.95fr] lg:px-10 lg:pb-32 lg:pt-24">
         <div className="relative z-10 max-w-2xl animate-fade-up">

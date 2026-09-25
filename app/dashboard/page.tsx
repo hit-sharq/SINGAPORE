@@ -4535,10 +4535,10 @@ export default function Page() {
         <header className="flex h-[76px] items-center justify-between border-b border-white/[0.07] px-5 sm:px-8">
           <div className="flex items-center gap-3">
             <button
-              className="text-white lg:hidden p-2 bg-white/10 rounded"
+              className="text-[#92948c] lg:hidden p-2 hover:bg-white/5 rounded transition"
               onClick={() => setMobileMenuOpen(true)}
             >
-              <Menu size={24} />
+              <Menu size={22} />
             </button>
             {activeNav !== 'Overview' && (
               <button
