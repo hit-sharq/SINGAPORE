@@ -4195,6 +4195,7 @@ function ShiftModal({
 }
 
 export default function Page() {
+  const { signOut } = useClerk()
   const [data, setData] = useState<DashboardData | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -4502,7 +4503,10 @@ export default function Page() {
           </nav>
         </div>
           <div className="mt-auto border-t border-white/[0.07] p-4">
-            <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04]">
+            <button
+              onClick={() => setActiveNav('Settings')}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04] hover:text-white"
+            >
               <Settings size={17} />
               Settings
             </button>
