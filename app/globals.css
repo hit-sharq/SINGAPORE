@@ -46,69 +46,6 @@ body { @apply bg-background text-foreground; font-family: Arial, Helvetica, sans
 @keyframes float { 50% { transform: translate(-30px, 20px) rotate(12deg); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; } }
 
-/* Clerk form mobile tweaks */
-@media (max-width: 480px) {
-  .auth-panel-form { padding: 1.5rem; }
-  .auth-panel-copy { padding: 1.5rem; min-height: 16rem; }
-  .auth-message h1 { font-size: clamp(2rem, 8vw, 3.5rem); max-width: 100%; }
-  .auth-message p:last-child { max-width: 100%; }
-  .auth-copy h2 { font-size: 1.8rem; }
-  
-  /* Clerk input fields */
-  [data-clerk-component="sign-in"], [data-clerk-component="sign-up"] {
-    --cl-card-width: 100% !important;
-    --cl-card-padding: 0 !important;
-  }
-  .cl-formFieldInput, .cl-formButtonPrimary {
-    width: 100% !important;
-    box-sizing: border-box;
-  }
-  
-  /* Fix Google button truncation and overflow */
-  .cl-externalAccountsBlockButton {
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-  }
-  .cl-externalAccountsBlockButton > div {
-    flex: 1 !important;
-    min-width: 0 !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-  }
-  .cl-dividerLine { max-width: 100% !important; }
-  .cl-formFields { gap: 1rem !important; }
-  .cl-formField { width: 100% !important; }
-  .cl-footerActionLink { font-size: 0.875rem !important; }
-  .cl-card { padding: 1.5rem !important; max-width: 100% !important; }
-  .cl-headerTitle { font-size: 1.5rem !important; }
-  .cl-headerSubtitle { font-size: 0.875rem !important; }
-}
-
-/* Better spacing on mobile for Clerk card */
-@media (max-width: 640px) {
-  .cl-card {
-    border-radius: 0 !important;
-    min-height: calc(100vh - 120px) !important;
-    display: flex !important;
-    flex-direction: column !important;
-  }
-  .cl-formFields {
-    flex: 1 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-  }
-  .cl-externalAccountsBlockButton {
-    margin-bottom: 0.5rem !important;
-  }
-  .cl-divider { margin: 1rem 0 !important; }
-  .cl-footer { padding-top: 1rem !important; }
-}
-
 /* Staff table responsive */
 @media (max-width: 1023px) {
   .staff-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
