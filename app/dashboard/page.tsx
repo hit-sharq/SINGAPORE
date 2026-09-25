@@ -3165,43 +3165,82 @@ function StaffView({ data }: { data: DashboardData }) {
         </button>
       </div>
 
-      <div className="border border-white/[0.08] bg-[#181a17] overflow-hidden">
-        <div className="grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.06] text-[10px] font-medium uppercase tracking-[0.1em] text-[#787a73]">
-          <div>Name</div>
-          <div>Email</div>
-          <div>Primary Role</div>
-          <div>Additional Roles</div>
-          <div>Status</div>
-          <div>Shifts</div>
-          <div></div>
+      <div className="staff-table-wrapper">
+        <div className="staff-grid border border-white/[0.08] bg-[#181a17] overflow-hidden">
+          <div className="grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.06] text-[10px] font-medium uppercase tracking-[0.1em] text-[#787a73]">
+            <div>Name</div>
+            <div>Email</div>
+            <div>Primary Role</div>
+            <div>Additional Roles</div>
+            <div>Status</div>
+            <div>Shifts</div>
+            <div></div>
+          </div>
+          {loading ? (
+            <div className="px-4 py-8 text-center text-[#777971]">Loading staff...</div>
+          ) : (
+            staffList.map((staff) => (
+              <div key={staff.id} className="grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.03] items-center">
+                <div className="font-medium">{staff.name}</div>
+                <div className="text-[#787a73] text-sm">{staff.email}</div>
+                <div>
+                  <span className="px-2 py-0.5 text-xs rounded bg-white/[0.05]">{staff.role}</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => (
+                    <span key={r} className="px-2 py-0.5 text-xs rounded bg-[#d8a85b]/20 text-[#d8a85b]">{r}</span>
+                  ))}
+                </div>
+                <div>
+                  <span className={`px-2 py-0.5 text-xs rounded ${
+                    staff.status === 'ACTIVE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                  }`}>
+                    {staff.status}
+                  </span>
+                </div>
+                <div className="text-sm text-[#787a73]">{staff.shiftCount} {staff.hasOpenShift && <span className="text-green-400 ml-1">●</span>}</div>
+                <div className="flex items-center justify-end gap-2">
+                  {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => (
+                    <button
+                      key={`${staff.id}-${r}`}
+                      onClick={() => handleRevokeGrant(roleGrants.find(g => g.userId === staff.id && g.role === r)?.id)}
+                      className="p-1 text-red-400 hover:bg-red-500/10 rounded"
+                      title={`Revoke ${r}`}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
         </div>
-        {loading ? (
-          <div className="px-4 py-8 text-center text-[#777971]">Loading staff...</div>
-        ) : (
-          staffList.map((staff) => (
-            <div key={staff.id} className="grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.03] items-center">
-              <div className="font-medium">{staff.name}</div>
-              <div className="text-[#787a73] text-sm">{staff.email}</div>
-              <div>
-                <span className="px-2 py-0.5 text-xs rounded bg-white/[0.05]">{staff.role}</span>
+      </div>
+
+      <div className="staff-cards space-y-3 px-1">
+        {!loading && staffList.map((staff) => (
+          <div key={staff.id} className="border border-white/[0.08] bg-[#181a17] rounded-lg p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium truncate">{staff.name}</p>
+                <p className="text-sm text-[#787a73] truncate">{staff.email}</p>
               </div>
-              <div className="flex flex-wrap gap-1">
-                {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => (
-                  <span key={r} className="px-2 py-0.5 text-xs rounded bg-[#d8a85b]/20 text-[#d8a85b]">{r}</span>
-                ))}
-              </div>
-              <div>
-                <span className={`px-2 py-0.5 text-xs rounded ${
-                  staff.status === 'ACTIVE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                }`}>
-                  {staff.status}
-                </span>
-              </div>
-              <div className="text-sm text-[#787a73]">{staff.shiftCount} {staff.hasOpenShift && <span className="text-green-400 ml-1">●</span>}</div>
-              <div className="flex items-center justify-end gap-2">
+              <span className={`px-2 py-1 text-xs rounded ${staff.status === 'ACTIVE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} shrink-0`}>
+                {staff.status}
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="px-2 py-0.5 text-xs rounded bg-white/[0.05]">{staff.role}</span>
+              {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => (
+                <span key={r} className="px-2 py-0.5 text-xs rounded bg-[#d8a85b]/20 text-[#d8a85b]">{r}</span>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center gap-4 text-sm text-[#787a73]">
+              <span>{staff.shiftCount} shifts {staff.hasOpenShift && <span className="text-green-400 ml-1">●</span>}</span>
+              <div className="flex items-center gap-1 ml-auto">
                 {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => (
                   <button
-                    key={`${staff.id}-${r}`}
+                    key={`${staff.id}-${r}-mobile`}
                     onClick={() => handleRevokeGrant(roleGrants.find(g => g.userId === staff.id && g.role === r)?.id)}
                     className="p-1 text-red-400 hover:bg-red-500/10 rounded"
                     title={`Revoke ${r}`}
@@ -3211,8 +3250,8 @@ function StaffView({ data }: { data: DashboardData }) {
                 ))}
               </div>
             </div>
-          ))
-        )}
+          </div>
+        ))}
       </div>
 
       <div className="border border-white/[0.08] bg-[#181a17] p-4">

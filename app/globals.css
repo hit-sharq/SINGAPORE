@@ -45,3 +45,16 @@ body { @apply bg-background text-foreground; font-family: Arial, Helvetica, sans
 @keyframes float { 50% { transform: translate(-30px, 20px) rotate(12deg); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; } }
 
+/* Staff table responsive */
+@media (max-width: 1023px) {
+  .staff-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .staff-table-wrapper > div { min-width: 700px; }
+}
+@media (max-width: 640px) {
+  .staff-grid { display: none; }
+  .staff-cards { display: block; }
+}
+@media (min-width: 641px) {
+  .staff-cards { display: none; }
+}
+
