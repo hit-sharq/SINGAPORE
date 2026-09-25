@@ -4551,7 +4551,7 @@ export default function Page() {
               Settings
             </button>
             <button
-              onClick={() => signOut()}
+              onClick={() => signOut({ redirectUrl: '/' })}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04]"
             >
               <LogOut size={17} />
@@ -4654,7 +4654,7 @@ export default function Page() {
                   Settings
                 </button>
                 <button
-                  onClick={() => { signOut(); setMobileMenuOpen(false); }}
+                  onClick={() => { signOut({ redirectUrl: '/' }); setMobileMenuOpen(false); }}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04]"
                 >
                   <LogOut size={17} />
