@@ -1373,7 +1373,7 @@ function CustomersView({ data }: { data: DashboardData }) {
   )
 }
 
-function AdminView({ data }: { data: DashboardData }) {
+function AdminView({ data, onNavChange }: { data: DashboardData; onNavChange: (label: string) => void }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1387,18 +1387,22 @@ function AdminView({ data }: { data: DashboardData }) {
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {[
-          { title: 'Staff Management', desc: 'Manage roles, permissions, and invites', icon: UserCog },
-          { title: 'System Settings', desc: 'Venue config, tax rules, receipt templates', icon: Settings },
-          { title: 'Integrations', desc: 'Pesapal, printers, payment terminals', icon: CreditCard },
-          { title: 'Audit Logs', desc: 'Track all system changes and actions', icon: ClipboardList },
-          { title: 'Feature Flags', desc: 'Toggle features across the venue', icon: Activity },
-          { title: 'Data Export', desc: 'Export reports and backups', icon: Truck },
+          { title: 'Staff Management', desc: 'Manage roles, permissions, and invites', icon: UserCog, nav: 'Staff' },
+          { title: 'System Settings', desc: 'Venue config, tax rules, receipt templates', icon: Settings, nav: 'Settings' },
+          { title: 'Integrations', desc: 'Pesapal, printers, payment terminals', icon: CreditCard, nav: 'Settings' },
+          { title: 'Audit Logs', desc: 'Track all system changes and actions', icon: ClipboardList, nav: 'Settings' },
+          { title: 'Feature Flags', desc: 'Toggle features across the venue', icon: Activity, nav: 'Settings' },
+          { title: 'Data Export', desc: 'Export reports and backups', icon: Truck, nav: 'Reports' },
         ].map((item) => (
-          <div key={item.title} className="border border-white/[0.08] bg-[#181a17] p-5 hover:border-[#d8a85b]/40 transition-colors">
+          <button
+            key={item.title}
+            onClick={() => onNavChange(item.nav)}
+            className="border border-white/[0.08] bg-[#181a17] p-5 hover:border-[#d8a85b]/40 transition-colors text-left focus:outline-none focus:ring-2 focus:ring-[#d8a85b]/40"
+          >
             <item.icon size={22} className="text-[#d8a85b] mb-3" />
             <h3 className="font-semibold">{item.title}</h3>
             <p className="mt-1 text-xs text-[#777971]">{item.desc}</p>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -2693,7 +2697,7 @@ export default function Page() {
       case 'Customers':
         return <CustomersView data={data} />
       case 'Admin':
-        return <AdminView data={data} />
+        return <AdminView data={data} onNavChange={setActiveNav} />
       case 'Reports':
         return <ReportsView data={data} />
       case 'Staff':
