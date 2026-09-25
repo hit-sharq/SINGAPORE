@@ -98,9 +98,8 @@ export async function POST(
 
     const isInflow = ['SALE', 'TIP_IN'].includes(type)
     const amountNum = Number(amount)
-    const newBalance = shift.cashDrawer
-      ? shift.cashDrawer.balance.plus(isInflow ? amountNum : -amountNum)
-      : (isInflow ? amountNum : -amountNum)
+    const currentBalance = shift.cashDrawer ? Number(shift.cashDrawer.balance) : 0
+    const newBalance = currentBalance + (isInflow ? amountNum : -amountNum)
 
     if (newBalance < 0) {
       return NextResponse.json({ error: 'Insufficient cash in drawer' }, { status: 400 })

@@ -33,7 +33,7 @@ export async function GET(request: Request) {
         GROUP BY p.id, p.name, p.category
         ORDER BY sold DESC
       ` as unknown as { id: string; name: string; category: string | null; sold: number; revenue: string; avgPrice: string }[],
-      prisma.inventoryMovement.findMany({
+      prisma.stockMovement.findMany({
         where: { createdAt: { gte: start } },
         orderBy: { createdAt: 'desc' },
         take: 100,
@@ -47,6 +47,8 @@ export async function GET(request: Request) {
       periodDays: days,
       products: products.map((p) => {
         const sales = salesMap.get(p.id)
+        const cost = Number(p.costPrice)
+        const price = Number(p.price)
         return {
           id: p.id,
           name: p.name,
@@ -54,9 +56,9 @@ export async function GET(request: Request) {
           category: p.category?.name ?? null,
           stock: p.stock.toString(),
           reorderAt: p.reorderAt.toString(),
-          cost: p.cost.toString(),
+          cost: p.costPrice.toString(),
           price: p.price.toString(),
-          margin: p.cost > 0 ? (((p.price - p.cost) / p.price) * 100).toFixed(1) : '0',
+          margin: cost > 0 ? (((price - cost) / price) * 100).toFixed(1) : '0',
           sold: sales?.sold ?? 0,
           revenue: sales?.revenue ?? '0',
           avgPrice: sales?.avgPrice ?? '0',
@@ -65,7 +67,7 @@ export async function GET(request: Request) {
       stockMovements: stockMovements.map((m) => ({
         id: m.id,
         product: m.product.name,
-        type: m.type,
+        type: Number(m.quantity) > 0 ? 'IN' : 'OUT',
         quantity: m.quantity.toString(),
         reason: m.reason,
         createdAt: m.createdAt.toISOString(),

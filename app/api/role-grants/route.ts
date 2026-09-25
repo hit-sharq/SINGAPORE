@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     }
 
     const grant = await prisma.roleGrant.create({
-      data: { userId, role, grantedBy: admin.id, active: true },
+      data: { userId, role, approvedById: admin.id, active: true },
     })
 
     return NextResponse.json({ grant }, { status: 201 })

@@ -15,7 +15,7 @@ export async function GET() {
     const staff = await requireRole([Role.ADMIN, Role.MANAGER])
     const staffList = await prisma.staffProfile.findMany({
       include: {
-        roleGrants: { where: { active: true }, select: { role: true } },
+        grants: { where: { active: true }, select: { role: true } },
         shifts: { where: { status: 'OPEN' }, take: 1 },
         _count: { select: { shifts: true } },
       },
@@ -28,7 +28,7 @@ export async function GET() {
         name: s.name,
         email: s.email,
         role: s.role,
-        roles: [s.role, ...s.roleGrants.map((g) => g.role)],
+        roles: [s.role, ...s.grants.map((g) => g.role)],
         status: s.status,
         lastActive: s.lastActive?.toISOString() ?? null,
         shiftCount: s._count.shifts,

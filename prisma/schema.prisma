@@ -62,6 +62,8 @@ model StaffProfile {
   name        String
   email       String   @unique
   role        Role     @default(CASHIER)
+  status      String   @default("ACTIVE")
+  lastActive  DateTime?
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -70,6 +72,7 @@ model StaffProfile {
   grants      RoleGrant[] @relation("grantedTo")
   auditLogs   AuditLog[]
   notifications Notification[]
+  shifts      Shift[]
 }
 
 model RoleGrant {
@@ -119,18 +122,19 @@ model VenueTable {
 }
 
 model Order {
-  id          String @id @default(cuid())
-  number      Int @unique @default(autoincrement())
-  status      OrderStatus @default(OPEN)
-  total       Decimal @default(0) @db.Decimal(12, 2)
-  tableId     String?
-  table       VenueTable? @relation(fields: [tableId], references: [id])
-  createdById String
-  createdBy   StaffProfile @relation("createdBy", fields: [createdById], references: [id])
-  items       OrderItem[]
-  payments    Payment[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String @id @default(cuid())
+  number          Int @unique @default(autoincrement())
+  status          OrderStatus @default(OPEN)
+  total           Decimal @default(0) @db.Decimal(12, 2)
+  tableId         String?
+  table           VenueTable? @relation(fields: [tableId], references: [id])
+  createdById     String
+  createdBy       StaffProfile @relation("createdBy", fields: [createdById], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+  statusHistory   OrderStatusHistory[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
   @@index([status, createdAt])
 }
 
@@ -155,6 +159,7 @@ model Payment {
   pesapalOrderId  String? @unique
   merchantRef     String? @unique
   confirmationRef String?
+  externalRef     String?
   rawResponse     Json?
   order           Order @relation(fields: [orderId], references: [id])
   createdAt       DateTime @default(now())
@@ -301,6 +306,7 @@ model ProductPriceHistory {
 model Shift {
   id            String @id @default(cuid())
   userId        String
+  user          StaffProfile @relation(fields: [userId], references: [id])
   startsAt      DateTime
   endsAt        DateTime?
   status        String @default("OPEN")
@@ -1375,6 +1381,7 @@ model OrderNote {
 model OrderStatusHistory {
   id        String @id @default(cuid())
   orderId   String
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   fromStatus OrderStatus?
   toStatus OrderStatus
   changedBy String

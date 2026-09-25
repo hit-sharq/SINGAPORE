@@ -40,7 +40,15 @@ import {
 } from 'lucide-react'
 
 type Category = { name: string }
-type Product = { id: string; name: string; price: string; stock: string; category: Category }
+type Product = { 
+  id: string; 
+  name: string; 
+  price: string; 
+  stock: string; 
+  sku: string;
+  reorderAt: string;
+  category: Category 
+}
 type TableOrder = {
   id: string
   number: number
@@ -1138,23 +1146,31 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
         ) : (
           products.map((product, i) => {
             const status = getStockStatus(product)
+            const isEditing = editingProduct?.id === product.id
             return (
-              <div key={product.id} className="grid grid-cols-8 gap-3 px-4 py-3 border-t border-white/[0.04] items-center">
+              <form
+                key={product.id}
+                onSubmit={(e) => { if (isEditing) { e.preventDefault(); handleUpdateProduct(new FormData(e.currentTarget)) } }}
+                className="grid grid-cols-8 gap-3 px-4 py-3 border-t border-white/[0.04] items-center"
+                data-product-id={product.id}
+              >
                 <div className="min-w-0">
                   <p className="text-xs font-medium truncate">{product.name}</p>
-                  {editingProduct?.id === product.id && (
+                  {isEditing && (
                     <input
+                      name="name"
                       type="text"
                       defaultValue={product.name}
                       className="w-full h-8 rounded-md border border-white/[0.1] bg-[#20221e] px-2 text-xs outline-none focus:border-[#d8a85b]/60"
                     />
                   )}
                 </div>
-                <p className="text-xs text-[#777971] font-mono">{product.sku ?? '—'}</p>
+                <p className="text-xs text-[#777971] font-mono">{product.sku ?? '\u2014'}</p>
                 <p className="text-xs text-[#777971]">{product.category.name}</p>
                 <div className="text-right">
-                  {editingProduct?.id === product.id ? (
+                  {isEditing ? (
                     <input
+                      name="stock"
                       type="number"
                       step="0.001"
                       defaultValue={product.stock}
@@ -1170,19 +1186,17 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
                 </span>
                 <p className="text-right text-xs text-[#777971]">{formatPrice(product.price)}</p>
                 <div className="flex items-center gap-1">
-                  {editingProduct?.id === product.id ? (
+                  {isEditing ? (
                     <>
                       <button
-                        onClick={() => handleUpdateProduct(new FormData(
-                          Array.from(document.querySelectorAll(`[data-product-id="${product.id}"] input, [data-product-id="${product.id}"] select`))
-                            .reduce((fd, el) => (fd.append(el.getAttribute('name')!, (el as HTMLInputElement).value), fd), new FormData())
-                        ))}
+                        type="submit"
                         disabled={saving === product.id}
                         className="text-[9px] text-[#7cc58f] hover:underline"
                       >
                         Save
                       </button>
                       <button
+                        type="button"
                         onClick={() => setEditingProduct(null)}
                         className="text-[9px] text-[#d8a85b] hover:underline"
                       >
@@ -1192,12 +1206,14 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
                   ) : (
                     <>
                       <button
+                        type="button"
                         onClick={() => setEditingProduct(product)}
                         className="text-[9px] text-[#d8a85b] hover:underline"
                       >
                         Edit
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleAdjustStock(product.id, 1, 'Manual restock')}
                         disabled={saving === product.id}
                         className="text-[9px] text-[#7cc58f] hover:underline"
@@ -1205,6 +1221,7 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
                         +1
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleAdjustStock(product.id, -1, 'Manual adjustment')}
                         disabled={saving === product.id || parseFloat(product.stock) <= 0}
                         className="text-[9px] text-[#dc8c72] hover:underline"
@@ -1212,6 +1229,7 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
                         -1
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleDeleteProduct(product.id, product.name)}
                         className="text-[9px] text-red-400 hover:underline"
                       >
@@ -1220,13 +1238,14 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
                     </>
                   )}
                 </div>
-              </div>
+              </form>
             )
           })
         )}
-      </div>
 
-      {showAddProduct && (
+        </div>
+
+        {showAddProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-white/[0.1] bg-[#171815] shadow-2xl rounded-xl">
             <div className="sticky top-0 flex items-center justify-between border-b border-white/[0.08] px-5 py-4 bg-[#171815] z-10">
@@ -1330,7 +1349,7 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
           </div>
         </div>
       )}
-    </div>
+</div>
   )
 }
 
@@ -1387,6 +1406,257 @@ function AdminView({ data }: { data: DashboardData }) {
 }
 
 function ReportsView({ data }: { data: DashboardData }) {
+  const [activeTab, setActiveTab] = useState<'daily' | 'products' | 'reconciliation'>('daily')
+  const [dailyReport, setDailyReport] = useState<any>(null)
+  const [productsReport, setProductsReport] = useState<any>(null)
+  const [reconReport, setReconReport] = useState<any>(null)
+  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    const fetchReport = async () => {
+      try {
+        if (activeTab === 'daily') {
+          const res = await fetch(`/api/reports/daily?date=${reportDate}`)
+          if (res.ok) setDailyReport(await res.json())
+        } else if (activeTab === 'products') {
+          const res = await fetch('/api/reports/products?days=30')
+          if (res.ok) setProductsReport(await res.json())
+        } else {
+          const res = await fetch(`/api/reports/reconciliation?date=${reportDate}`)
+          if (res.ok) setReconReport(await res.json())
+        }
+      } catch (e) {
+        console.error('Failed to load report:', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchReport()
+  }, [activeTab, reportDate])
+
+  const formatKES = (val: string | number) => {
+    const n = typeof val === 'string' ? parseFloat(val) : val
+    return `KES ${n.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+  }
+
+  const renderDaily = () => {
+    if (!dailyReport) return <div className="text-center py-8 text-[#777971]">Loading...</div>
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-4">
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Revenue</p>
+            <p className="mt-1 text-2xl font-semibold">{formatKES(dailyReport.revenue)}</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Orders</p>
+            <p className="mt-1 text-2xl font-semibold">{dailyReport.orderCount}</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Avg Order</p>
+            <p className="mt-1 text-2xl font-semibold">{formatKES(dailyReport.avgOrderValue)}</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Voids / Refunds</p>
+            <p className="mt-1 text-2xl font-semibold">{dailyReport.voids} / {dailyReport.refunds}</p>
+          </div>
+        </div>
+        <div className="border border-white/[0.08] bg-[#181a17] p-4">
+          <h3 className="font-semibold mb-3">Payment Mix</h3>
+          <div className="flex flex-wrap gap-4">
+            {dailyReport.paymentMix.map((p: any) => (
+              <div key={p.method} className="text-sm">
+                <span className="text-[#787a73]">{p.method}:</span>{' '}
+                <span className="font-medium">{formatKES(p.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="border border-white/[0.08] bg-[#181a17] p-4">
+          <h3 className="font-semibold mb-3">Top Products</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
+                  <th className="pb-2">Product</th>
+                  <th className="pb-2 text-right">Sold</th>
+                  <th className="pb-2 text-right">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dailyReport.topProducts.map((p: any) => (
+                  <tr key={p.name} className="border-b border-white/[0.03]">
+                    <td className="py-2">{p.name}</td>
+                    <td className="py-2 text-right">{p.sold}</td>
+                    <td className="py-2 text-right">{formatKES(p.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderProducts = () => {
+    if (!productsReport) return <div className="text-center py-8 text-[#777971]">Loading...</div>
+    return (
+      <div className="space-y-4">
+        <div className="border border-white/[0.08] bg-[#181a17] p-4">
+          <h3 className="font-semibold mb-3">Product Performance (Last {productsReport.periodDays} Days)</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
+                  <th className="pb-2">Product</th>
+                  <th className="pb-2">Category</th>
+                  <th className="pb-2 text-right">Stock</th>
+                  <th className="pb-2 text-right">Reorder</th>
+                  <th className="pb-2 text-right">Sold</th>
+                  <th className="pb-2 text-right">Revenue</th>
+                  <th className="pb-2 text-right">Margin %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productsReport.products.map((p: any) => (
+                  <tr key={p.id} className="border-b border-white/[0.03]">
+                    <td className="py-2">{p.name}</td>
+                    <td className="py-2 text-[#787a73]">{p.category || '-'}</td>
+                    <td className="py-2 text-right">{parseFloat(p.stock).toFixed(1)}</td>
+                    <td className="py-2 text-right">{parseFloat(p.reorderAt).toFixed(1)}</td>
+                    <td className="py-2 text-right">{p.sold}</td>
+                    <td className="py-2 text-right">{formatKES(p.revenue)}</td>
+                    <td className="py-2 text-right">{p.margin}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="border border-white/[0.08] bg-[#181a17] p-4">
+          <h3 className="font-semibold mb-3">Recent Stock Movements</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
+                  <th className="pb-2">Product</th>
+                  <th className="pb-2">Type</th>
+                  <th className="pb-2 text-right">Qty</th>
+                  <th className="pb-2">Reason</th>
+                  <th className="pb-2">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productsReport.stockMovements.slice(0, 20).map((m: any) => (
+                  <tr key={m.id} className="border-b border-white/[0.03]">
+                    <td className="py-2">{m.product}</td>
+                    <td className="py-2">
+                      <span className={`px-2 py-0.5 text-xs rounded ${m.type === 'IN' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                        {m.type}
+                      </span>
+                    </td>
+                    <td className="py-2 text-right">{m.quantity}</td>
+                    <td className="py-2 text-[#787a73]">{m.reason}</td>
+                    <td className="py-2 text-[#787a73]">{formatTime(m.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderReconciliation = () => {
+    if (!reconReport) return <div className="text-center py-8 text-[#777971]">Loading...</div>
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-4">
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Pesapal</p>
+            <p className="mt-1 text-xl font-semibold">{formatKES(reconReport.totals.pesapal)} ({reconReport.counts.pesapal})</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Card</p>
+            <p className="mt-1 text-xl font-semibold">{formatKES(reconReport.totals.card)} ({reconReport.counts.card})</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Cash</p>
+            <p className="mt-1 text-xl font-semibold">{formatKES(reconReport.totals.cash)} ({reconReport.counts.cash})</p>
+          </div>
+          <div className="border border-white/[0.08] bg-[#181a17] p-4 border-[#d8a85b]/30">
+            <p className="text-xs text-[#787a73] uppercase tracking-[0.1em]">Total</p>
+            <p className="mt-1 text-xl font-semibold text-[#d8a85b]">{formatKES(reconReport.totals.grand)}</p>
+          </div>
+        </div>
+        {reconReport.discrepancies.length > 0 && (
+          <div className="border border-red-500/30 bg-red-500/10 p-4">
+            <h3 className="font-semibold text-red-400 mb-2">Discrepancies Requiring Attention</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-red-400 border-b border-red-500/30">
+                    <th className="pb-2">Order</th>
+                    <th className="pb-2">Method</th>
+                    <th className="pb-2 text-right">Amount</th>
+                    <th className="pb-2">Status</th>
+                    <th className="pb-2">Ref</th>
+                    <th className="pb-2">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reconReport.discrepancies.map((d: any) => (
+                    <tr key={d.id} className="border-b border-red-500/10">
+                      <td className="py-2">{d.order}</td>
+                      <td className="py-2">{d.method}</td>
+                      <td className="py-2 text-right">{formatKES(d.amount)}</td>
+                      <td className="py-2"><span className={`px-2 py-0.5 text-xs rounded ${d.status === 'FAILED' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{d.status}</span></td>
+                      <td className="py-2 text-[#787a73]">{d.externalRef || '-'}</td>
+                      <td className="py-2 text-[#787a73]">{formatTime(d.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        <div className="border border-white/[0.08] bg-[#181a17] p-4">
+          <h3 className="font-semibold mb-3">Shifts</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
+                  <th className="pb-2">Staff</th>
+                  <th className="pb-2">Opened</th>
+                  <th className="pb-2">Closed</th>
+                  <th className="pb-2 text-right">Opening</th>
+                  <th className="pb-2 text-right">Closing</th>
+                  <th className="pb-2 text-right">Expected</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reconReport.shifts.map((s: any) => (
+                  <tr key={s.id} className="border-b border-white/[0.03]">
+                    <td className="py-2">{s.user}</td>
+                    <td className="py-2">{formatTime(s.opensAt)}</td>
+                    <td className="py-2">{s.closesAt ? formatTime(s.closesAt) : '<span className="text-yellow-400">Open</span>'}</td>
+                    <td className="py-2 text-right">{formatKES(s.openingCash)}</td>
+                    <td className="py-2 text-right">{s.closingCash ? formatKES(s.closingCash) : '-'}</td>
+                    <td className="py-2 text-right">{formatKES(s.expectedCash)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1397,28 +1667,141 @@ function ReportsView({ data }: { data: DashboardData }) {
           </h2>
           <p className="text-sm text-[#878981]">Business intelligence and exports</p>
         </div>
+        <div className="flex items-center gap-3">
+          <input
+            type="date"
+            value={reportDate}
+            onChange={(e) => setReportDate(e.target.value)}
+            className="rounded-md border border-white/[0.1] bg-[#181a17] px-3 py-2 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+          />
+          <button
+            onClick={() => window.open(`/api/reports/${activeTab}?date=${reportDate}`, '_blank')}
+            className="flex items-center gap-2 rounded-md border border-white/[0.1] bg-[#181a17] px-4 py-2.5 text-xs font-medium text-[#a4a59e] hover:border-[#d8a85b]/50 transition"
+          >
+            <Download size={14} />
+            Export
+          </button>
+        </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="flex gap-1 border-b border-white/[0.08]">
         {[
-          { title: 'Daily Summary', desc: 'Revenue, orders, payment mix by day' },
-          { title: 'Product Performance', desc: 'Best sellers, margins, stock turnover' },
-          { title: 'Staff Performance', desc: 'Sales per server, tips, hours' },
-          { title: 'Inventory Report', desc: 'Stock levels, waste, reorder needs' },
-          { title: 'Payment Reconciliation', desc: 'Pesapal, card, cash settlement' },
-          { title: 'Customer Insights', desc: 'Visit frequency, spend, preferences' },
-        ].map((item) => (
-          <div key={item.title} className="border border-white/[0.08] bg-[#181a17] p-5 hover:border-[#d8a85b]/40 transition-colors">
-            <h3 className="font-semibold">{item.title}</h3>
-            <p className="mt-1 text-xs text-[#777971]">{item.desc}</p>
-            <button className="mt-3 text-xs font-medium text-[#d8a85b] hover:underline">View →</button>
-          </div>
+          { id: 'daily', label: 'Daily Summary', icon: CalendarDays },
+          { id: 'products', label: 'Product Performance', icon: Package },
+          { id: 'reconciliation', label: 'Reconciliation', icon: CreditCard },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center gap-2 px-4 py-2 text-sm transition ${
+              activeTab === tab.id
+                ? 'text-[#d8a85b] border-b-2 border-[#d8a85b]'
+                : 'text-[#787a73] hover:text-white'
+            }`}
+          >
+            <tab.icon size={15} />
+            {tab.label}
+          </button>
         ))}
       </div>
+      {loading ? (
+        <div className="text-center py-8 text-[#777971]">Loading report...</div>
+      ) : (
+        activeTab === 'daily' ? renderDaily() : activeTab === 'products' ? renderProducts() : renderReconciliation()
+      )}
     </div>
   )
 }
 
 function StaffView({ data }: { data: DashboardData }) {
+  const [staffList, setStaffList] = useState<any[]>([])
+  const [roleGrants, setRoleGrants] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [inviteForm, setInviteForm] = useState({ email: '', name: '', role: 'CASHIER' })
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [grantLoading, setGrantLoading] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [staffRes, grantsRes] = await Promise.all([
+          fetch('/api/staff'),
+          fetch('/api/role-grants'),
+        ])
+        if (staffRes.ok) {
+          const d = await staffRes.json()
+          setStaffList(d.staff)
+        }
+        if (grantsRes.ok) {
+          const d = await grantsRes.json()
+          setRoleGrants(d.grants)
+        }
+      } catch (e) {
+        console.error('Failed to load staff:', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setInviteLoading(true)
+    try {
+      const res = await fetch('/api/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inviteForm),
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to invite')
+      setShowInviteModal(false)
+      setInviteForm({ email: '', name: '', role: 'CASHIER' })
+      const staffRes = await fetch('/api/staff')
+      if (staffRes.ok) {
+        const d = await staffRes.json()
+        setStaffList(d.staff)
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to invite staff')
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
+  const handleGrantRole = async (userId: string, role: string) => {
+    setGrantLoading(userId)
+    try {
+      const res = await fetch('/api/role-grants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, role: role as any }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to grant role')
+      const grantsRes = await fetch('/api/role-grants')
+      if (grantsRes.ok) {
+        const d = await grantsRes.json()
+        setRoleGrants(d.grants)
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to grant role')
+    } finally {
+      setGrantLoading(null)
+    }
+  }
+
+  const handleRevokeGrant = async (grantId: string) => {
+    try {
+      const res = await fetch(`/api/role-grants?id=${grantId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to revoke')
+      setRoleGrants(roleGrants.filter((g) => g.id !== grantId))
+    } catch (err) {
+      alert('Failed to revoke role grant')
+    }
+  }
+
+  const roleOptions = ['CASHIER', 'BARTENDER', 'WAITER', 'INVENTORY_MANAGER', 'MANAGER', 'ADMIN']
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1429,23 +1812,143 @@ function StaffView({ data }: { data: DashboardData }) {
           </h2>
           <p className="text-sm text-[#878981]">Team members, roles, and schedules</p>
         </div>
-        <button className="flex items-center gap-2 rounded-md bg-[#d8a85b] px-4 py-2.5 text-xs font-semibold text-[#1b1914] transition hover:bg-[#e4b96d]">
-          <Plus size={15} />
+        <button
+          onClick={() => setShowInviteModal(true)}
+          className="flex items-center gap-2 rounded-md bg-[#d8a85b] px-4 py-2.5 text-xs font-semibold text-[#1b1914] transition hover:bg-[#e4b96d]"
+        >
+          <UserPlus size={15} />
           Invite Staff
         </button>
       </div>
+
       <div className="border border-white/[0.08] bg-[#181a17] overflow-hidden">
         <div className="grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.06] text-[10px] font-medium uppercase tracking-[0.1em] text-[#787a73]">
           <div>Name</div>
           <div>Email</div>
-          <div>Role</div>
+          <div>Primary Role</div>
+          <div>Additional Roles</div>
           <div>Status</div>
-          <div>Last Active</div>
           <div>Shifts</div>
           <div></div>
         </div>
-        <div className="px-4 py-8 text-center text-[#777971]">Staff list coming soon</div>
+        {loading ? (
+          <div className="px-4 py-8 text-center text-[#777971]">Loading staff...</div>
+        ) : (
+          staffList.map((staff) => (
+            <div key={staff.id} className="grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.03] items-center">
+              <div className="font-medium">{staff.name}</div>
+              <div className="text-[#787a73] text-sm">{staff.email}</div>
+              <div>
+                <span className="px-2 py-0.5 text-xs rounded bg-white/[0.05]">{staff.role}</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => (
+                  <span key={r} className="px-2 py-0.5 text-xs rounded bg-[#d8a85b]/20 text-[#d8a85b]">{r}</span>
+                ))}
+              </div>
+              <div>
+                <span className={`px-2 py-0.5 text-xs rounded ${
+                  staff.status === 'ACTIVE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                }`}>
+                  {staff.status}
+                </span>
+              </div>
+              <div className="text-sm text-[#787a73]">{staff.shiftCount} {staff.hasOpenShift && <span className="text-green-400 ml-1">●</span>}</div>
+              <div className="flex items-center justify-end gap-2">
+                {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => (
+                  <button
+                    key={`${staff.id}-${r}`}
+                    onClick={() => handleRevokeGrant(roleGrants.find(g => g.userId === staff.id && g.role === r)?.id)}
+                    className="p-1 text-red-400 hover:bg-red-500/10 rounded"
+                    title={`Revoke ${r}`}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
       </div>
+
+      <div className="border border-white/[0.08] bg-[#181a17] p-4">
+        <h3 className="font-semibold mb-3">Grant Additional Role</h3>
+        <div className="flex flex-wrap gap-3">
+          {staffList.map((staff) => roleOptions
+            .filter(r => !staff.roles.includes(r))
+            .map((role) => (
+              <button
+                key={`${staff.id}-${role}`}
+                onClick={() => handleGrantRole(staff.id, role)}
+                disabled={grantLoading === staff.id}
+                className="px-3 py-1.5 text-xs rounded border border-white/[0.1] bg-[#181a17] text-[#a4a59e] hover:border-[#d8a85b]/50 hover:text-[#d8a85b] transition disabled:opacity-50"
+              >
+                +{role} → {staff.name}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-[#181a17] border border-white/[0.08] rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Invite Staff Member</h3>
+            <form onSubmit={handleInvite}>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-[#787a73] mb-1">Name</label>
+                  <input
+                    type="text"
+                    value={inviteForm.name}
+                    onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                    required
+                    className="w-full rounded-md border border-white/[0.1] bg-[#111210] px-3 py-2 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#787a73] mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={inviteForm.email}
+                    onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                    required
+                    className="w-full rounded-md border border-white/[0.1] bg-[#111210] px-3 py-2 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#787a73] mb-1">Primary Role</label>
+                  <select
+                    value={inviteForm.role}
+                    onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
+                    className="w-full rounded-md border border-white/[0.1] bg-[#111210] px-3 py-2 text-sm text-[#f3f0e9] focus:border-[#d8a85b] focus:outline-none"
+                  >
+                    {roleOptions.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowInviteModal(false)}
+                  className="px-4 py-2 text-sm border border-white/[0.1] hover:border-white/[0.3] transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={inviteLoading}
+                  className="px-4 py-2 text-sm bg-[#d8a85b] text-[#1b1914] font-medium rounded hover:bg-[#e4b96d] disabled:opacity-50"
+                >
+                  {inviteLoading ? 'Inviting...' : 'Send Invite'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
