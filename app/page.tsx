@@ -537,8 +537,8 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
             <p className="text-[10px] uppercase tracking-[0.16em] text-[#d8a85b]">Point of sale</p>
             <h2 className="mt-1 text-lg font-semibold">New customer tab</h2>
           </div>
-          <button type="button" onClick={(e) => { e.stopPropagation(); setShowSale(false) }} className="text-[#8c8e86] hover:text-white">
-            <X size={20} />
+          <button type="button" onClick={(e) => { e.stopPropagation(); setShowSale(false) }} className="text-[#8c8e86] hover:text-white p-1">
+            <X size={20} className="pointer-events-none" />
           </button>
         </div>
         <div className="grid lg:grid-cols-[1fr_310px]">
