@@ -666,6 +666,8 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
 }
 
 function OrdersView({ data, onOrderClick }: { data: DashboardData; onOrderClick: (orderId: string) => void }) {
+  const [showSale, setShowSale] = useState(false)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -673,11 +675,27 @@ function OrdersView({ data, onOrderClick }: { data: DashboardData; onOrderClick:
           <h2 className="text-2xl font-semibold">Orders</h2>
           <p className="text-sm text-[#878981]">All orders across the venue</p>
         </div>
-        <button className="flex items-center gap-2 rounded-md bg-[#d8a85b] px-4 py-2.5 text-xs font-semibold text-[#1b1914] transition hover:bg-[#e4b96d]">
+        <button onClick={() => setShowSale(true)} className="flex items-center gap-2 rounded-md bg-[#d8a85b] px-4 py-2.5 text-xs font-semibold text-[#1b1914] transition hover:bg-[#e4b96d]">
           <Plus size={15} />
           New Order
         </button>
       </div>
+      {showSale && <POSView
+        products={products}
+        categories={categories}
+        activeCategory={activeCategory}
+        query={query}
+        filteredProducts={filteredProducts}
+        cart={cart}
+        onCategoryChange={onCategoryChange}
+        onQueryChange={onQueryChange}
+        onAddToCart={onAddToCart}
+        onRemoveFromCart={onRemoveFromCart}
+        cartTotal={cartTotal}
+        onCheckout={onCheckout}
+        showSale={showSale}
+        setShowSale={setShowSale}
+      />}
       <div className="border border-white/[0.08] bg-[#181a17]">
         {data.recentOrders.length === 0 ? (
           <p className="px-4 py-3.5 text-xs text-[#777971]">No orders found.</p>
@@ -2741,7 +2759,22 @@ export default function Page() {
           </>
         )
       case 'Orders':
-        return <OrdersView data={data} onOrderClick={fetchOrderDetail} />
+        return <OrdersView
+          data={data}
+          onOrderClick={fetchOrderDetail}
+          products={products}
+          categories={categories}
+          activeCategory={activeCategory}
+          query={query}
+          filteredProducts={filteredProducts}
+          cart={cart}
+          onCategoryChange={setActiveCategory}
+          onQueryChange={setQuery}
+          onAddToCart={addToCart}
+          onRemoveFromCart={removeFromCart}
+          cartTotal={cartTotal}
+          onCheckout={handleCheckout}
+        />
       case 'Floor & Pool':
         return <FloorView data={data} onRefresh={refreshDashboard} />
       case 'Inventory':
