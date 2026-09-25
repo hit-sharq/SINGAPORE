@@ -1953,8 +1953,77 @@ function StaffView({ data }: { data: DashboardData }) {
   )
 }
 
+function Skeleton({ className = '' }: { className?: string }) {
+  return (
+    <div className={`animate-pulse bg-white/[0.06] rounded ${className}`} />
+  )
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="min-h-screen bg-[#111210] p-6 space-y-6">
+      {/* Header skeleton */}
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-10 w-32" />
+      </div>
+      {/* Stats grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="border border-white/[0.08] bg-[#181a17] p-5">
+            <Skeleton className="h-3 w-24 mb-2" />
+            <Skeleton className="h-8 w-20" />
+          </div>
+        ))}
+      </div>
+      {/* Tables & Orders */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Tables */}
+        <div className="border border-white/[0.08] bg-[#181a17] p-5">
+          <Skeleton className="h-6 w-32 mb-4" />
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center justify-between p-3 bg-[#111210] rounded">
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-5 w-16" />
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Recent orders */}
+        <div className="border border-white/[0.08] bg-[#181a17] p-5">
+          <Skeleton className="h-6 w-32 mb-4" />
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center justify-between p-3 bg-[#111210] rounded">
+                <div className="flex-1">
+                  <Skeleton className="h-4 w-3/4 mb-1" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+                <Skeleton className="h-4 w-20" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {/* Low stock */}
+      <div className="border border-white/[0.08] bg-[#181a17] p-5">
+        <Skeleton className="h-6 w-32 mb-4" />
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center justify-between p-3 bg-[#111210] rounded">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SettingsView() {
-return (
+  return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold">Settings</h2>
@@ -2569,11 +2638,7 @@ export default function Page() {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[#111210] flex items-center justify-center">
-        <div className="text-[#a4a59e]">Loading dashboard...</div>
-      </div>
-    )
+    return <DashboardSkeleton />
   }
 
   if (error || !data) {
