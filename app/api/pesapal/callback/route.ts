@@ -2,46 +2,45 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { PaymentStatus, OrderStatus } from '@prisma/client'
 
+/**
+ * PesaPal callback endpoint — receives the payment result and updates the Payment record.
+ * This is a public route (no auth) — whitelisted in proxy.ts.
+ */
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const orderTrackingId = url.searchParams.get('OrderTrackingId')
   const merchantReference = url.searchParams.get('OrderMerchantReference')
+  const status = url.searchParams.get('status')
 
   if (!orderTrackingId && !merchantReference) {
-    return NextResponse.json({ error: 'Missing transaction reference' }, { status: 400 })
+    return NextResponse.redirect(new URL('/?payment=error', url.origin))
   }
 
   try {
-    // Find the PesapalTransaction by either reference
     const transaction = orderTrackingId
       ? await prisma.pesapalTransaction.findFirst({ where: { pesapalOrderId: orderTrackingId } })
       : await prisma.pesapalTransaction.findUnique({ where: { merchantRef: merchantReference! } })
 
     if (!transaction) {
-      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
+      return NextResponse.redirect(new URL('/?payment=error', url.origin))
     }
 
-    // Determine final status from PesaPal response
-    const pesapalStatus = (transaction.callbackPayload as any)?.status
     let newPaymentStatus: PaymentStatus | null = null
-
-    if (pesapalStatus === 'Completed') {
+    if (status === 'Completed' || (transaction.callbackPayload as any)?.status === 'Completed') {
       newPaymentStatus = PaymentStatus.COMPLETED
-    } else if (pesapalStatus === 'Failed' || pesapalStatus === 'Invalid') {
+    } else if (status === 'Failed' || status === 'Invalid') {
       newPaymentStatus = PaymentStatus.FAILED
-    } else if (pesapalStatus === 'Refunded') {
+    } else if (status === 'Refunded') {
       newPaymentStatus = PaymentStatus.REFUNDED
     }
 
     if (newPaymentStatus && transaction.status !== newPaymentStatus) {
       await prisma.$transaction(async (tx) => {
-        // Update PesapalTransaction status
         await tx.pesapalTransaction.update({
           where: { id: transaction.id },
           data: { status: newPaymentStatus },
         })
 
-        // Update the linked Payment record
         const payment = await tx.payment.findFirst({
           where: { merchantRef: transaction.merchantRef },
         })
@@ -59,17 +58,16 @@ export async function GET(request: Request) {
             },
           })
 
-          // If payment completed, mark order PAID
           if (newPaymentStatus === PaymentStatus.COMPLETED) {
             const order = await tx.order.findUnique({
               where: { id: payment.orderId },
               include: { payments: true },
             })
-            if (order) {
+            if (order && order.status === 'OPEN') {
               const paidAmount = order.payments
-                .filter((p) => p.id !== payment.id || newPaymentStatus === PaymentStatus.COMPLETED)
+                .filter((p) => p.status === 'COMPLETED' || p.id === payment.id)
                 .reduce((sum, p) => sum.plus(p.amount), new (require('@prisma/client').Prisma.Decimal)(0))
-              if (paidAmount.greaterThanOrEqualTo(order.total) && order.status === 'OPEN') {
+              if (paidAmount.greaterThanOrEqualTo(order.total)) {
                 await tx.order.update({
                   where: { id: order.id },
                   data: { status: OrderStatus.PAID },
@@ -95,13 +93,9 @@ export async function GET(request: Request) {
       })
     }
 
-    return NextResponse.json({
-      orderTrackingId,
-      merchantReference,
-      status: transaction.status,
-    })
+    return NextResponse.redirect(new URL('/?payment=success', url.origin))
   } catch (error) {
-    console.error('PesaPal IPN error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('PesaPal callback error:', error)
+    return NextResponse.redirect(new URL('/?payment=error', url.origin))
   }
 }

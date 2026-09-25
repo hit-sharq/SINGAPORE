@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
+import {
+  pesapalGetAuthToken,
+  pesapalSubmitOrder,
+  PesapalError,
+} from '@/lib/pesapal'
 import { Role, PaymentMethod, PaymentStatus, OrderStatus } from '@prisma/client'
 
 const paymentSchema = z.object({
@@ -11,6 +16,14 @@ const paymentSchema = z.object({
   pesapalOrderId: z.string().optional(),
   merchantRef: z.string().optional(),
 })
+
+const PESA_PAL_REDIRECT_URL = process.env.NEXT_PUBLIC_APP_URL
+  ? `${process.env.NEXT_PUBLIC_APP_URL}/api/pesapal/callback`
+  : undefined
+
+function generateMerchantRef(orderNumber: number, paymentId: string): string {
+  return `ORD-${orderNumber}-${paymentId.slice(-6).toUpperCase()}`
+}
 
 export async function POST(
   request: Request,
@@ -84,6 +97,105 @@ export async function POST(
 
       return created
     })
+
+    // If PesaPal, initiate the actual gateway call
+    if (method === 'PESAPAL') {
+      try {
+        const [keySetting, secretSetting, ipnSetting] = await Promise.all([
+          prisma.appSetting.findUnique({ where: { key: 'pesapal_consumer_key' } }),
+          prisma.appSetting.findUnique({ where: { key: 'pesapal_consumer_secret' } }),
+          prisma.appSetting.findUnique({ where: { key: 'pesapal_ipn_url' } }),
+        ])
+        // Env vars take precedence; fall back to database config
+        const consumerKey = process.env.PESAPAL_CONSUMER_KEY || keySetting?.value
+        const consumerSecret = process.env.PESAPAL_CONSUMER_SECRET || secretSetting?.value
+        const ipnUrl = ipnSetting?.value
+
+        if (!consumerKey || !consumerSecret) {
+          return NextResponse.json({
+            ...payment,
+            amount: payment.amount.toString(),
+            warning: 'PesaPal credentials not configured',
+          })
+        }
+
+        const merchantRef = generateMerchantRef(order.number, payment.id)
+        const callbackUrl = ipnUrl || PESA_PAL_REDIRECT_URL
+        if (!callbackUrl) {
+          return NextResponse.json({
+            ...payment,
+            amount: payment.amount.toString(),
+            warning: 'No callback URL configured',
+          })
+        }
+        const redirectUrl = callbackUrl
+
+        const result = await pesapalSubmitOrder({
+          consumerKey,
+          consumerSecret,
+          merchantRef,
+          amount: Number(payment.amount),
+          currency: payment.currency,
+          description: `Order #${order.number}`,
+          callbackUrl,
+          notificationUrl: callbackUrl,
+          redirectUrl,
+        })
+
+        await prisma.pesapalTransaction.create({
+          data: {
+            orderId: id,
+            merchantRef,
+            pesapalOrderId: result.pesapal_transaction_id,
+            status: result.status === 'Completed' ? PaymentStatus.COMPLETED : PaymentStatus.PENDING,
+            amount: payment.amount,
+            currency: payment.currency,
+            callbackPayload: result as any,
+          },
+        })
+
+        await prisma.payment.update({
+          where: { id: payment.id },
+          data: {
+            merchantRef,
+            pesapalOrderId: result.pesapal_transaction_id,
+            confirmationRef: result.pesapal_transaction_id,
+            rawResponse: result as any,
+          },
+        })
+
+        return NextResponse.json({
+          ...payment,
+          amount: payment.amount.toString(),
+          merchantRef,
+          pesapalOrderId: result.pesapal_transaction_id,
+          redirectUrl: result.redirect_url,
+        })
+      } catch (err) {
+        if (err instanceof PesapalError) {
+          await prisma.payment.update({
+            where: { id: payment.id },
+            data: {
+              status: PaymentStatus.FAILED,
+              rawResponse: { error: err.message } as any,
+            },
+          })
+          await prisma.paymentStatusHistory.create({
+            data: {
+              paymentId: payment.id,
+              fromStatus: PaymentStatus.PENDING,
+              toStatus: PaymentStatus.FAILED,
+            },
+          })
+          return NextResponse.json({
+            ...payment,
+            amount: payment.amount.toString(),
+            error: err.message,
+          }, { status: 502 })
+        }
+        throw err
+      }
+    }
 
     return NextResponse.json({
       ...payment,

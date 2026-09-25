@@ -24,9 +24,9 @@ export async function GET() {
 
     return NextResponse.json({
       config: {
-        consumerKey: key?.value ?? '',
-        consumerSecret: secret?.value ?? '',
-        ipnUrl: ipnUrl?.value ?? '',
+        consumerKey: process.env.PESAPAL_CONSUMER_KEY || key?.value || '',
+        consumerSecret: process.env.PESAPAL_CONSUMER_SECRET || secret?.value || '',
+        ipnUrl: ipnUrl?.value || '',
         enabled: enabled?.value === 'true',
       },
     })

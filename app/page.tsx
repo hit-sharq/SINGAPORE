@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useClerk } from '@clerk/nextjs'
 import {
   Activity,
   ArrowDownRight,
@@ -21,6 +22,7 @@ import {
   Filter,
   LayoutDashboard,
   Loader2,
+  LogOut,
   Mail,
   Menu,
   MoreHorizontal,
@@ -3829,15 +3831,19 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ method, amount }),
       })
+      const data = await response.json()
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Payment failed')
+        throw new Error(data.error || 'Payment failed')
+      }
+      // PesaPal returns a redirectUrl — send the user to PesaPal's payment page
+      if (method === 'PESAPAL' && data.redirectUrl) {
+        window.location.href = data.redirectUrl
+        return
       }
       onRefresh()
       setPaymentAmount('')
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Payment failed')
-    } finally {
       setProcessing(null)
     }
   }
@@ -4495,22 +4501,29 @@ export default function Page() {
             ))}
           </nav>
         </div>
-        <div className="mt-auto border-t border-white/[0.07] p-4">
-          <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04]">
-            <Settings size={17} />
-            Settings
-          </button>
-          <div className="mt-4 flex items-center gap-3 border-t border-white/[0.07] pt-4">
-            <div className="flex size-8 items-center justify-center rounded-full bg-[#8a6655] text-xs font-semibold">
-              {getInitials(data.staff.name)}
+          <div className="mt-auto border-t border-white/[0.07] p-4">
+            <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04]">
+              <Settings size={17} />
+              Settings
+            </button>
+            <button
+              onClick={() => signOut()}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04]"
+            >
+              <LogOut size={17} />
+              Sign Out
+            </button>
+            <div className="mt-4 flex items-center gap-3 border-t border-white/[0.07] pt-4">
+              <div className="flex size-8 items-center justify-center rounded-full bg-[#8a6655] text-xs font-semibold">
+                {getInitials(data.staff.name)}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium">{data.staff.name}</p>
+                <p className="text-[10px] text-[#777971]">{roleLabels[data.staff.role] ?? data.staff.role}</p>
+              </div>
+              <ChevronDown className="ml-auto text-[#777971]" size={14} />
             </div>
-            <div className="min-w-0">
-              <p className="truncate text-xs font-medium">{data.staff.name}</p>
-              <p className="text-[10px] text-[#777971]">{roleLabels[data.staff.role] ?? data.staff.role}</p>
-            </div>
-            <ChevronDown className="ml-auto text-[#777971]" size={14} />
           </div>
-        </div>
       </aside>
 
       <section className="lg:pl-[228px]">
