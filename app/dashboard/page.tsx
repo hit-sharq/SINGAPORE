@@ -4579,15 +4579,6 @@ export default function Page() {
             >
               <Menu size={22} />
             </button>
-            {activeNav !== 'Overview' && (
-              <button
-                onClick={() => setActiveNav('Overview')}
-                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium text-[#a4a59e] hover:bg-white/[0.04] hover:text-white transition lg:hidden"
-              >
-                <ChevronLeft size={15} />
-                Back
-              </button>
-            )}
             <div>
               <p className="text-[11px] uppercase tracking-[0.16em] text-[#73756f]">{formatDate()}</p>
               <h1 className="mt-1 text-xl font-semibold tracking-tight">
