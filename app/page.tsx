@@ -529,6 +529,8 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
     return () => window.removeEventListener('keydown', handleEscape)
   }, [setShowSale])
 
+  if (!showSale) return null
+
   return (
     <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={() => setShowSale(false)}>
       <div className="w-full max-w-5xl border border-white/[0.1] bg-[#171815] shadow-2xl" onClick={(e) => e.stopPropagation()}>
