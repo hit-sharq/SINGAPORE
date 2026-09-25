@@ -18,6 +18,15 @@ export default function SignUpPage() {
   const [error, setError] = useState('')
   const [step, setStep] = useState<'details' | 'verify'>('details')
 
+  const handleResend = async () => {
+    if (!signUp) return
+    try {
+      await signUp.prepareEmailAddressVerification()
+    } catch (err) {
+      setError('Failed to resend code')
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!signUp || status === 'loading') return
@@ -242,7 +251,7 @@ export default function SignUpPage() {
               {step === 'verify' && (
                 <p className="text-center text-sm text-[#a8a399]">
                   Didn't receive it?{' '}
-                  <button type="button" className="text-[#d4a85a] hover:text-[#e1b96d] font-medium transition-colors">
+                  <button type="button" onClick={handleResend} className="text-[#d4a85a] hover:text-[#e1b96d] font-medium transition-colors">
                     Resend code
                   </button>
                 </p>
