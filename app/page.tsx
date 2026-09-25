@@ -665,7 +665,7 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
   )
 }
 
-function OrdersView({ data, onOrderClick }: { data: DashboardData; onOrderClick: (orderId: string) => void }) {
+function OrdersView({ data, onOrderClick, products, categories, activeCategory, query, filteredProducts, cart, onCategoryChange, onQueryChange, onAddToCart, onRemoveFromCart, cartTotal, onCheckout }: { data: DashboardData; onOrderClick: (orderId: string) => void; products: Product[]; categories: string[]; activeCategory: string; query: string; filteredProducts: Product[]; cart: CartItem[]; onCategoryChange: (category: string) => void; onQueryChange: (query: string) => void; onAddToCart: (product: Product) => void; onRemoveFromCart: (productId: string) => void; cartTotal: number; onCheckout: () => void }) {
   const [showSale, setShowSale] = useState(false)
 
   return (
