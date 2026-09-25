@@ -112,18 +112,18 @@ type POSViewProps = {
 }
 
 const navItems = [
-  { label: 'Overview', icon: LayoutDashboard },
-  { label: 'Point of Sale', icon: ShoppingBag },
-  { label: 'Orders', icon: CircleDollarSign },
-  { label: 'Floor & Pool', icon: Table2 },
-  { label: 'Inventory', icon: Package },
-  { label: 'Customers', icon: Users },
+  { label: 'Overview', icon: LayoutDashboard, roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER', 'INVENTORY_MANAGER'] },
+  { label: 'Point of Sale', icon: ShoppingBag, roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER'] },
+  { label: 'Orders', icon: CircleDollarSign, roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER'] },
+  { label: 'Floor & Pool', icon: Table2, roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER'] },
+  { label: 'Inventory', icon: Package, roles: ['ADMIN', 'MANAGER', 'INVENTORY_MANAGER'] },
+  { label: 'Customers', icon: Users, roles: ['ADMIN', 'MANAGER'] },
 ]
 
 const adminNavItems = [
-  { label: 'Admin', icon: Shield },
-  { label: 'Reports', icon: BarChart3 },
-  { label: 'Staff', icon: UserCog },
+  { label: 'Admin', icon: Shield, roles: ['ADMIN'] },
+  { label: 'Reports', icon: BarChart3, roles: ['ADMIN', 'MANAGER'] },
+  { label: 'Staff', icon: UserCog, roles: ['ADMIN'] },
 ]
 
 const roleLabels: Record<string, string> = {
@@ -2694,7 +2694,11 @@ export default function Page() {
   }
 
   const isAdmin = data.staff.roles.includes('ADMIN')
-  const allNavItems = [...navItems, ...(isAdmin ? adminNavItems : [])]
+  const userRoles = data.staff.roles
+  const allNavItems = [
+    ...navItems.filter((item) => item.roles.some((r) => userRoles.includes(r))),
+    ...adminNavItems.filter((item) => item.roles.some((r) => userRoles.includes(r))),
+  ]
 
   const renderView = () => {
     switch (activeNav) {
