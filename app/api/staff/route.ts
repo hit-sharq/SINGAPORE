@@ -4,12 +4,16 @@ import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
 import { z } from 'zod'
 import { createClerkClient } from '@clerk/nextjs/server'
-import { errorResponse, createdResponse, ErrorCodes } from '@/lib/api/response'
+import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
 const inviteSchema = z.object({
   email: z.string().email('Invalid email address'),
   name: z.string().min(1, 'Name is required'),
   role: z.nativeEnum(Role),
+})
+
+const resendInviteSchema = z.object({
+  staffId: z.string().cuid('Invalid staff ID'),
 })
 
 const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
@@ -99,5 +103,80 @@ export async function POST(request: NextRequest) {
     }
     console.error('POST /api/staff error:', error)
     return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to invite staff', 500, undefined, getPath(request))
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    await requireRole([Role.ADMIN])
+    const { searchParams } = new URL(request.url)
+    const staffId = searchParams.get('id')
+    if (!staffId) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Staff ID is required', 400, undefined, getPath(request))
+    }
+
+    const staff = await prisma.staffProfile.findUnique({ where: { id: staffId } })
+    if (!staff) {
+      return errorResponse(ErrorCodes.NOT_FOUND, 'Staff member not found', 404, undefined, getPath(request))
+    }
+
+    if (staff.status === 'ACTIVE') {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Cannot revoke an active staff member. Deactivate them first.', 400, { field: 'status' }, getPath(request))
+    }
+
+    await prisma.staffProfile.delete({ where: { id: staffId } })
+
+    return successResponse({ success: true, message: 'Invitation revoked' })
+  } catch (error) {
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'Only administrators can revoke invitations', 403, undefined, getPath(request))
+    }
+    console.error('DELETE /api/staff error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to revoke invitation', 500, undefined, getPath(request))
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    await requireRole([Role.ADMIN])
+    const body = await request.json()
+    const parsed = resendInviteSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid request data', 400, parsed.error.issues, getPath(request))
+    }
+
+    const { staffId } = parsed.data
+
+    const staff = await prisma.staffProfile.findUnique({ where: { id: staffId } })
+    if (!staff) {
+      return errorResponse(ErrorCodes.NOT_FOUND, 'Staff member not found', 404, undefined, getPath(request))
+    }
+
+    if (staff.status === 'ACTIVE') {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Cannot resend invitation for active staff member', 400, { field: 'status' }, getPath(request))
+    }
+
+    try {
+      await clerkClient.invitations.createInvitation({
+        emailAddress: staff.email,
+        publicMetadata: { staffId: staff.id, role: staff.role },
+        redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/sign-up`,
+      })
+    } catch (clerkError) {
+      console.error('Clerk invitation failed:', clerkError)
+      return errorResponse(ErrorCodes.SERVICE_UNAVAILABLE, 'Failed to send invitation email', 502, undefined, getPath(request))
+    }
+
+    return successResponse({ success: true, message: 'Invitation resent' })
+  } catch (error) {
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'Only administrators can resend invitations', 403, undefined, getPath(request))
+    }
+    if (error instanceof z.ZodError) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid request data', 400, error.issues, getPath(request))
+    }
+    console.error('PUT /api/staff error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to resend invitation', 500, undefined, getPath(request))
   }
 }
