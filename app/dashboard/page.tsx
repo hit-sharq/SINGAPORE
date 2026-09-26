@@ -94,6 +94,11 @@ type LowStockProduct = { id: string; name: string; stock: string; reorderAt: str
 type HourlyRevenueEntry = { hour: number; revenue: string }
 type RevenueByCategoryEntry = { category: string; amount: string }
 type LastPayment = { amount: string; method: string; createdAt: string } | null
+type DashboardResponse = {
+  data: DashboardData
+  timestamp: string
+}
+
 type DashboardData = {
   staff: { name: string; role: string; email: string; roles: string[] }
   revenue: string
@@ -1638,15 +1643,15 @@ function IntegrationsView() {
       ])
       if (pesapalRes.ok) {
         const d = await pesapalRes.json()
-        setPesapal(d.config)
+        setPesapal(d.data.config)
       }
       if (printersRes.ok) {
         const d = await printersRes.json()
-        setPrinters(d.printers)
+        setPrinters(d.data.printers)
       }
       if (healthRes.ok) {
         const d = await healthRes.json()
-        setHealth(d.health)
+        setHealth(d.data.health)
       }
     } catch (e) {
       console.error('Failed to load integrations:', e)
@@ -1908,10 +1913,10 @@ function AuditLogsView() {
       const res = await fetch(`/api/audit-logs?${params.toString()}`)
       if (res.ok) {
         const d = await res.json()
-        setLogs(d.logs)
-        setPagination(d.pagination)
-        setAvailableActions(d.filters.actions)
-        setAvailableEntities(d.filters.entities)
+        setLogs(d.data.logs)
+        setPagination(d.data.pagination)
+        setAvailableActions(d.data.filters.actions)
+        setAvailableEntities(d.data.filters.entities)
       }
     } catch (e) {
       console.error('Failed to load audit logs:', e)
@@ -2100,7 +2105,7 @@ function FeatureFlagsView() {
       const res = await fetch('/api/feature-flags')
       if (res.ok) {
         const d = await res.json()
-        setFlags(d.flags.map((f: any) => ({ key: f.key, enabled: f.enabled, updatedAt: f.updatedAt })))
+        setFlags(d.data.flags.map((f: any) => ({ key: f.key, enabled: f.enabled, updatedAt: f.updatedAt })))
       }
     } catch (e) {
       console.error('Failed to load feature flags:', e)
@@ -2287,8 +2292,8 @@ function DataExportView() {
       const res = await fetch(`/api/data-export?page=${page}&limit=${pagination.limit}`)
       if (res.ok) {
         const d = await res.json()
-        setExports(d.exports)
-        setPagination(d.pagination)
+        setExports(d.data.exports)
+        setPagination(d.data.pagination)
       }
     } catch (e) {
       console.error('Failed to load exports:', e)
@@ -3099,11 +3104,11 @@ function StaffView({ data }: { data: DashboardData }) {
         ])
         if (staffRes.ok) {
           const d = await staffRes.json()
-          setStaffList(d.staff)
+          setStaffList(d.data.staff)
         }
         if (grantsRes.ok) {
           const d = await grantsRes.json()
-          setRoleGrants(d.grants)
+          setRoleGrants(d.data.grants)
         }
       } catch (e) {
         console.error('Failed to load staff:', e)
@@ -3129,7 +3134,7 @@ function StaffView({ data }: { data: DashboardData }) {
       const staffRes = await fetch('/api/staff')
       if (staffRes.ok) {
         const d = await staffRes.json()
-        setStaffList(d.staff)
+        setStaffList(d.data.staff)
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to invite staff')
@@ -3150,7 +3155,7 @@ function StaffView({ data }: { data: DashboardData }) {
       const grantsRes = await fetch('/api/role-grants')
       if (grantsRes.ok) {
         const d = await grantsRes.json()
-        setRoleGrants(d.grants)
+        setRoleGrants(d.data.grants)
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to grant role')
@@ -4260,7 +4265,7 @@ function ShiftModal({
 
 export default function Page() {
   const { signOut } = useClerk()
-  const [data, setData] = useState<DashboardData | null>(null)
+  const [data, setData] = useState<DashboardResponse | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)

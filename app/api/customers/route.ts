@@ -21,15 +21,15 @@ export async function GET(request: NextRequest) {
     await requireRole([Role.ADMIN, Role.MANAGER])
     const customerInclude = {
       orders: { include: { order: { select: { createdAt: true } } } },
-    }
+    } as any
 
     const customers = await prisma.customer.findMany({
       include: customerInclude,
       orderBy: { createdAt: 'desc' },
-    })
+    }) as any
 
     return successResponse({
-      customers: customers.map((c) => ({
+      customers: customers.map((c: any) => ({
         id: c.id,
         name: c.name,
         phone: c.phone,

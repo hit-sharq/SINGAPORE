@@ -24,7 +24,6 @@ export async function GET(request: NextRequest) {
       lowStock,
       recentOrders,
       paymentMix,
-      revenueByCategory,
       hourlyRevenue,
       lastPayment,
     ] = await Promise.all([
@@ -41,12 +40,22 @@ export async function GET(request: NextRequest) {
       prisma.order.count({ where: { status: 'OPEN' } }),
       prisma.venueTable.findMany({
         orderBy: { name: 'asc' },
-        include: {
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          capacity: true,
           orders: {
             where: { status: 'OPEN' },
             orderBy: { createdAt: 'asc' },
             take: 1,
-            include: { payments: { select: { method: true, status: true } } },
+            select: {
+              id: true,
+              number: true,
+              total: true,
+              createdAt: true,
+              payments: { select: { method: true, status: true } },
+            },
           },
         },
       }),
@@ -59,7 +68,7 @@ export async function GET(request: NextRequest) {
       prisma.order.findMany({
         where: { createdById: staff.id },
         include: {
-          items: { include: { product: true } },
+          items: { include: { product: { select: { name: true } } } },
           payments: { select: { method: true, status: true } },
           table: { select: { name: true } },
         },
@@ -70,11 +79,6 @@ export async function GET(request: NextRequest) {
         by: ['method'],
         where: { createdAt: { gte: start }, status: 'COMPLETED' },
         _sum: { amount: true },
-      }),
-      prisma.order.groupBy({
-        by: ['status'],
-        where: { createdAt: { gte: start }, status: 'PAID' },
-        _sum: { total: true },
       }),
       prisma.$queryRaw`
         SELECT 
@@ -92,10 +96,22 @@ export async function GET(request: NextRequest) {
       }),
     ])
 
-    const outstanding = await prisma.order.aggregate({
-      where: { status: 'OPEN' },
-      _sum: { total: true },
-    })
+    const [outstanding, revenueByCategory] = await Promise.all([
+      prisma.order.aggregate({
+        where: { status: 'OPEN' },
+        _sum: { total: true },
+      }),
+      prisma.$queryRaw`
+        SELECT c.name as category, COALESCE(SUM(oi.subtotal)::text, '0') as amount
+        FROM "OrderItem" oi
+        JOIN "Product" p ON oi."productId" = p.id
+        JOIN "Category" c ON p."categoryId" = c.id
+        JOIN "Order" o ON oi."orderId" = o.id
+        WHERE o."createdAt" >= ${start} AND o.status = 'PAID'
+        GROUP BY c.name
+        ORDER BY amount DESC
+      ` as unknown as { category: string; amount: string }[],
+    ])
 
     return successResponse({
       staff: {
@@ -143,8 +159,8 @@ export async function GET(request: NextRequest) {
       })),
       outstanding: outstanding._sum.total?.toString() ?? '0',
       revenueByCategory: revenueByCategory.map((r) => ({
-        category: r.status,
-        amount: r._sum.total?.toString() ?? '0',
+        category: r.category,
+        amount: r.amount,
       })),
       hourlyRevenue,
       lastPayment: lastPayment

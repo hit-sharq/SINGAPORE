@@ -1,11 +1,38 @@
 import { currentUser } from '@clerk/nextjs/server'
 import { Role } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { unstable_cache } from 'next/cache'
 
 function getAdminClerkIds(): Set<string> {
   const ids = process.env.ADMIN_CLERK_IDS?.split(',').map((id) => id.trim()).filter(Boolean) ?? []
   return new Set(ids)
 }
+
+const getCachedStaff = unstable_cache(
+  async (clerkUserId: string, email: string) => {
+    const staff = await prisma.staffProfile.findUnique({
+      where: { email },
+    })
+    if (!staff) return null
+
+    const adminIds = getAdminClerkIds()
+    const isAdmin = adminIds.has(clerkUserId)
+
+    const grants = await prisma.roleGrant.findMany({
+      where: { userId: staff.id, active: true },
+      select: { role: true },
+    })
+
+    const roles = [staff.role, ...grants.map((grant) => grant.role)]
+    if (isAdmin && !roles.includes(Role.ADMIN)) {
+      roles.push(Role.ADMIN)
+    }
+
+    return { ...staff, roles }
+  },
+  ['staff-profile'],
+  { revalidate: 60, tags: ['staff'] }
+)
 
 export async function getCurrentStaff() {
   const user = await currentUser()
@@ -14,17 +41,10 @@ export async function getCurrentStaff() {
   const email = user.emailAddresses[0]?.emailAddress
   if (!email) return null
 
-  // Only find existing profile linked via invite email, don't auto-create
-  const staff = await prisma.staffProfile.findUnique({
-    where: { email },
-  })
+  const staff = await getCachedStaff(user.id, email)
   if (!staff) return null
 
-  // Admin check via env var
-  const adminIds = getAdminClerkIds()
-  const isAdmin = adminIds.has(user.id)
-
-  // Link clerk ID if pending
+  // Link clerk ID if pending (non-cached update)
   if (staff.clerkUserId.startsWith('pending_')) {
     await prisma.staffProfile.update({
       where: { id: staff.id },
@@ -33,17 +53,7 @@ export async function getCurrentStaff() {
     staff.clerkUserId = user.id
   }
 
-  const grants = await prisma.roleGrant.findMany({
-    where: { userId: staff.id, active: true },
-    select: { role: true },
-  })
-
-  const roles = [staff.role, ...grants.map((grant) => grant.role)]
-  if (isAdmin && !roles.includes(Role.ADMIN)) {
-    roles.push(Role.ADMIN)
-  }
-
-  return { ...staff, roles }
+  return staff
 }
 
 export async function requireRole(roles: Role[]) {
