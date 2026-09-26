@@ -266,7 +266,17 @@ function getTableGuest(table: TableInfo): string | undefined {
   return undefined
 }
 
-function OverviewView({ data, onOrderClick }: { data: DashboardData; onOrderClick: (orderId: string) => void }) {
+function OverviewView({
+  data,
+  onOrderClick,
+  setShowSale,
+  setActiveNav,
+}: {
+  data: DashboardData
+  onOrderClick: (orderId: string) => void
+  setShowSale: (show: boolean) => void
+  setActiveNav: (nav: string) => void
+}) {
   const totalRevenue = parseFloat(data.revenue)
   const foodRevenue = data.revenueByCategory
     .filter((e) => e.category.toLowerCase().includes('food'))
@@ -321,11 +331,17 @@ function OverviewView({ data, onOrderClick }: { data: DashboardData; onOrderClic
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-2 rounded-md bg-[#d8a85b] px-4 py-2.5 text-xs font-semibold text-[#1b1914] transition hover:bg-[#e4b96d]">
+          <button
+            onClick={() => setShowSale(true)}
+            className="flex items-center gap-2 rounded-md bg-[#d8a85b] px-4 py-2.5 text-xs font-semibold text-[#1b1914] transition hover:bg-[#e4b96d]"
+          >
             <Plus size={15} />
             New sale
           </button>
-          <button className="flex items-center gap-2 rounded-md border border-white/[0.1] bg-white/[0.025] px-4 py-2.5 text-xs font-medium text-[#d0d0c9] hover:bg-white/[0.06]">
+          <button
+            onClick={() => setActiveNav('Overview')}
+            className="flex items-center gap-2 rounded-md border border-white/[0.1] bg-white/[0.025] px-4 py-2.5 text-xs font-medium text-[#d0d0c9] hover:bg-white/[0.06]"
+          >
             <CalendarDays size={15} />
             Today
           </button>
@@ -352,7 +368,10 @@ function OverviewView({ data, onOrderClick }: { data: DashboardData; onOrderClic
               <h3 className="text-sm font-semibold">Revenue overview</h3>
               <p className="mt-1 text-xs text-[#777971]">Hourly performance · {formatDate()}</p>
             </div>
-            <button className="flex items-center gap-1.5 text-xs text-[#a5a69f]">
+            <button
+              onClick={() => setActiveNav('Reports')}
+              className="flex items-center gap-1.5 text-xs text-[#a5a69f] hover:text-[#d8a85b]"
+            >
               This week <ChevronDown size={13} />
             </button>
           </div>
@@ -399,7 +418,12 @@ function OverviewView({ data, onOrderClick }: { data: DashboardData; onOrderClic
               <h3 className="text-sm font-semibold">Payment activity</h3>
               <p className="mt-1 text-xs text-[#777971]">Today's collection mix</p>
             </div>
-            <MoreHorizontal size={17} className="text-[#777971]" />
+            <button
+              onClick={() => setActiveNav('Reports')}
+              className="text-[#777971] hover:text-[#d8a85b]"
+            >
+              <MoreHorizontal size={17} />
+            </button>
           </div>
           <div className="border border-white/[0.08] bg-[#181a17] p-5">
             {data.paymentMix.length === 0 ? (
@@ -454,7 +478,12 @@ function OverviewView({ data, onOrderClick }: { data: DashboardData; onOrderClic
                 {data.tables.filter((t) => t.status === 'OCCUPIED').length} in play
               </p>
             </div>
-            <button className="text-xs font-medium text-[#d8a85b]">Manage floor →</button>
+            <button
+              onClick={() => setActiveNav('Floor & Pool')}
+              className="text-xs font-medium text-[#d8a85b] hover:underline"
+            >
+              Manage floor →
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {data.tables.length === 0 ? (
@@ -463,7 +492,8 @@ function OverviewView({ data, onOrderClick }: { data: DashboardData; onOrderClic
               data.tables.map((table) => (
                 <div
                   key={table.id}
-                  className={`border p-4 ${
+                  onClick={() => setActiveNav('Floor & Pool')}
+                  className={`border p-4 cursor-pointer transition hover:bg-white/[0.02] ${
                     table.status === 'OCCUPIED'
                       ? 'border-[#d8a85b]/40 bg-[#211e17]'
                       : 'border-white/[0.08] bg-[#181a17]'
@@ -504,7 +534,12 @@ function OverviewView({ data, onOrderClick }: { data: DashboardData; onOrderClic
               <h3 className="text-sm font-semibold">Recent orders</h3>
               <p className="mt-1 text-xs text-[#777971]">Activity across the floor</p>
             </div>
-            <button className="text-xs font-medium text-[#d8a85b]">View all →</button>
+            <button
+              onClick={() => setActiveNav('Orders')}
+              className="text-xs font-medium text-[#d8a85b] hover:underline"
+            >
+              View all →
+            </button>
           </div>
           <div className="border border-white/[0.08] bg-[#181a17]">
             {data.recentOrders.length === 0 ? (
@@ -565,8 +600,8 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
             <X size={20} className="pointer-events-none" />
           </button>
         </div>
-        <div className="grid lg:grid-cols-[1fr_310px]">
-          <div className="p-5">
+        <div className="grid lg:grid-cols-[1fr_310px] max-h-[90vh]">
+          <div className="p-5 overflow-hidden flex flex-col">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#777971]" size={16} />
               <input
@@ -591,7 +626,7 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 max-h-[50vh] overflow-y-auto pb-4 pr-2">
+            <div className="flex-1 min-h-0 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 max-h-[50vh] overflow-y-auto pb-4 pr-2">
               {filteredProducts.length === 0 ? (
                 <p className="col-span-full text-xs text-[#777971]">No products found.</p>
               ) : (
@@ -4477,7 +4512,7 @@ export default function Page() {
   const renderView = () => {
     switch (activeNav) {
       case 'Overview':
-        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} />
+        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} setShowSale={setShowSale} setActiveNav={setActiveNav} />
       case 'Point of Sale':
         return (
           <>
@@ -4538,7 +4573,7 @@ export default function Page() {
       case 'Settings':
         return <SettingsView />
       default:
-        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} />
+        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} setShowSale={setShowSale} setActiveNav={setActiveNav} />
     }
   }
 
