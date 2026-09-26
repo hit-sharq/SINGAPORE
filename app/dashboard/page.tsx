@@ -4307,6 +4307,9 @@ export default function Page() {
   const [closingCash, setClosingCash] = useState('')
   const [shiftProcessing, setShiftProcessing] = useState(false)
   const [showSale, setShowSale] = useState(false)
+  const [activeCategory, setActiveCategory] = useState('All items')
+  const [query, setQuery] = useState('')
+  const [cart, setCart] = useState<CartItem[]>([])
 
   async function fetchShift() {
     try {
@@ -4421,6 +4424,64 @@ export default function Page() {
     fetchData()
   }, [])
 
+  const categories = useMemo(() => {
+    const cats = Array.from(new Set(products.map((p) => p.category.name)))
+    return ['All items', ...cats]
+  }, [products])
+
+  const filteredProducts = useMemo(
+    () =>
+      products.filter(
+        (product) =>
+          (activeCategory === 'All items' || product.category.name === activeCategory) &&
+          product.name.toLowerCase().includes(query.toLowerCase()),
+      ),
+    [products, activeCategory, query],
+  )
+
+  const cartTotal = cart.reduce((sum, item) => sum + parseFloat(item.price) * item.quantity, 0)
+
+  function addToCart(product: Product) {
+    setCart((current) => {
+      const found = current.find((item) => item.id === product.id)
+      return found
+        ? current.map((item) => (item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item))
+        : [...current, { ...product, quantity: 1 }]
+    })
+  }
+
+  function removeFromCart(productId: string) {
+    setCart((current) => current.filter((item) => item.id !== productId))
+  }
+
+  async function handleCheckout() {
+    if (cart.length === 0) return
+
+    const items = cart.map((item) => ({
+      productId: item.id,
+      quantity: item.quantity,
+    }))
+
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to create order')
+      }
+
+      setCart([])
+      setShowSale(false)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Checkout failed'
+      alert(message)
+    }
+  }
+
   if (!data) {
     return null
   }
@@ -4434,7 +4495,71 @@ export default function Page() {
   ]
 
   const renderView = () => {
-    return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} setShowSale={setShowSale} setActiveNav={setActiveNav} />
+    switch (activeNav) {
+      case 'Overview':
+        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} setShowSale={setShowSale} setActiveNav={setActiveNav} />
+      case 'Point of Sale':
+        return (
+          <>
+            <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-[#d8a85b]">Point of sale</p>
+                <h2 className="text-3xl font-semibold tracking-[-0.03em]">Create new tab</h2>
+                <p className="mt-2 text-sm text-[#878981]">Add products to the cart and send to a table</p>
+              </div>
+            </div>
+            <POSView
+              products={products}
+              categories={categories}
+              activeCategory={activeCategory}
+              query={query}
+              filteredProducts={filteredProducts}
+              cart={cart}
+              onCategoryChange={setActiveCategory}
+              onQueryChange={setQuery}
+              onAddToCart={addToCart}
+              onRemoveFromCart={removeFromCart}
+              cartTotal={cartTotal}
+              onCheckout={handleCheckout}
+              showSale={showSale}
+              setShowSale={setShowSale}
+            />
+          </>
+        )
+      case 'Orders':
+        return <OrdersView
+          data={dashboardData}
+          onOrderClick={fetchOrderDetail}
+          products={products}
+          categories={categories}
+          activeCategory={activeCategory}
+          query={query}
+          filteredProducts={filteredProducts}
+          cart={cart}
+          onCategoryChange={setActiveCategory}
+          onQueryChange={setQuery}
+          onAddToCart={addToCart}
+          onRemoveFromCart={removeFromCart}
+          cartTotal={cartTotal}
+          onCheckout={handleCheckout}
+        />
+      case 'Floor & Pool':
+        return <FloorView data={dashboardData} onRefresh={refreshDashboard} />
+      case 'Inventory':
+        return <InventoryView data={dashboardData} onRefresh={refreshDashboard} />
+      case 'Customers':
+        return <CustomersView data={dashboardData} />
+      case 'Admin':
+        return <AdminView data={dashboardData} />
+      case 'Reports':
+        return <ReportsView data={dashboardData} />
+      case 'Staff':
+        return <StaffView data={dashboardData} />
+      case 'Settings':
+        return <SettingsView />
+      default:
+        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} setShowSale={setShowSale} setActiveNav={setActiveNav} />
+    }
   }
 
   return (
@@ -4452,11 +4577,10 @@ export default function Page() {
               </button>
             </div>
             <nav className="px-3 pt-7 flex flex-col gap-1">
-              {allNavItems.map(({ label, icon: Icon, href }) => (
-                <Link
+              {allNavItems.map(({ label, icon: Icon }) => (
+                <button
                   key={label}
-                  href={href}
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={() => { setActiveNav(label); setMobileMenuOpen(false); }}
                   className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition ${
                     activeNav === label
                       ? 'bg-[#d8a85b]/12 font-medium text-[#e5ba72]'
@@ -4465,18 +4589,17 @@ export default function Page() {
                 >
                   <Icon size={17} strokeWidth={1.7} />
                   {label}
-                </Link>
+                </button>
               ))}
             </nav>
             <div className="mt-auto border-t border-white/[0.07] p-4 space-y-2">
-              <Link
-                href="/dashboard/settings"
-                onClick={() => setMobileMenuOpen(false)}
+              <button
+                onClick={() => { setActiveNav('Settings'); setMobileMenuOpen(false); }}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04] hover:text-white"
               >
                 <Settings size={17} />
                 Settings
-              </Link>
+              </button>
               <button
                 onClick={() => { signOut({ redirectUrl: '/' }); setMobileMenuOpen(false); }}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04]"
@@ -4503,11 +4626,11 @@ export default function Page() {
         <div className="px-3 pt-7">
           <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#71736c]">Workspace</p>
           <nav className="flex flex-col gap-1">
-            {allNavItems.map(({ label, icon: Icon, href }) => (
-              <Link
+            {allNavItems.map(({ label, icon: Icon }) => (
+              <button
                 key={label}
-                href={href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition ${
+                onClick={() => setActiveNav(label)}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition w-full ${
                   activeNav === label
                     ? 'bg-[#d8a85b]/12 font-medium text-[#e5ba72]'
                     : 'text-[#a4a59e] hover:bg-white/[0.04] hover:text-white'
@@ -4515,18 +4638,18 @@ export default function Page() {
               >
                 <Icon size={17} strokeWidth={1.7} />
                 {label}
-              </Link>
+              </button>
             ))}
           </nav>
         </div>
           <div className="mt-auto border-t border-white/[0.07] p-4">
-            <Link
-              href="/dashboard/settings"
+            <button
+              onClick={() => setActiveNav('Settings')}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04] hover:text-white"
             >
               <Settings size={17} />
               Settings
-            </Link>
+            </button>
             <button
               onClick={() => signOut({ redirectUrl: '/' })}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04]"
