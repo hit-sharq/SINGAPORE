@@ -19,26 +19,24 @@ function getPath(request: NextRequest): string {
 export async function GET(request: NextRequest) {
   try {
     await requireRole([Role.ADMIN, Role.MANAGER])
-    const customerInclude: any = {
-      _count: { select: { orders: true } },
-      orders: { orderBy: { createdAt: 'desc' }, take: 1 },
+    const customerInclude = {
+      orders: { include: { order: { select: { createdAt: true } } } },
     }
 
     const customers = await prisma.customer.findMany({
-      // @ts-ignore - Prisma relations not in schema
       include: customerInclude,
       orderBy: { createdAt: 'desc' },
-    }) as any
+    })
 
     return successResponse({
-      customers: (customers as any[]).map((c) => ({
+      customers: customers.map((c) => ({
         id: c.id,
         name: c.name,
         phone: c.phone,
         email: c.email,
         notes: c.notes,
-        orderCount: c._count.orders,
-        lastOrder: c.orders[0]?.createdAt?.toISOString() ?? null,
+        orderCount: c.orders.length,
+        lastOrder: c.orders[0]?.order?.createdAt?.toISOString() ?? null,
         createdAt: c.createdAt.toISOString(),
       })),
     })

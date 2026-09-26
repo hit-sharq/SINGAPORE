@@ -230,6 +230,7 @@ model Customer {
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  orders    CustomerOrder[]
 }
 
 model Reservation {
@@ -293,6 +294,7 @@ model CustomerOrder {
   id         String @id @default(cuid())
   customerId String
   orderId    String @unique
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 }
 
 model ProductPriceHistory {

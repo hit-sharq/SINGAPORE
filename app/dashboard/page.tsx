@@ -987,8 +987,14 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
           fetch('/api/products'),
           fetch('/api/categories'),
         ])
-        if (prodRes.ok) setProducts(await prodRes.json())
-        if (catRes.ok) setCategories(await catRes.json())
+        if (prodRes.ok) {
+          const prodData = await prodRes.json()
+          setProducts(prodData.data.products)
+        }
+        if (catRes.ok) {
+          const catData = await catRes.json()
+          setCategories(catData.data.categories ?? catData.data)
+        }
       } catch (err) {
         console.error('Failed to load inventory:', err)
       } finally {
@@ -2481,22 +2487,40 @@ function ReportsView({ data }: { data: DashboardData }) {
       try {
         if (activeTab === 'daily') {
           const res = await fetch(`/api/reports/daily?date=${reportDate}`)
-          if (res.ok) setDailyReport(await res.json())
+          if (res.ok) {
+            const d = await res.json()
+            setDailyReport(d.data)
+          }
         } else if (activeTab === 'products') {
           const res = await fetch('/api/reports/products?days=30')
-          if (res.ok) setProductsReport(await res.json())
+          if (res.ok) {
+            const d = await res.json()
+            setProductsReport(d.data)
+          }
         } else if (activeTab === 'reconciliation') {
           const res = await fetch(`/api/reports/reconciliation?date=${reportDate}`)
-          if (res.ok) setReconReport(await res.json())
+          if (res.ok) {
+            const d = await res.json()
+            setReconReport(d.data)
+          }
         } else if (activeTab === 'staff') {
           const res = await fetch('/api/reports/staff?days=30')
-          if (res.ok) setStaffReport(await res.json())
+          if (res.ok) {
+            const d = await res.json()
+            setStaffReport(d.data)
+          }
         } else if (activeTab === 'inventory') {
           const res = await fetch('/api/reports/inventory?days=30')
-          if (res.ok) setInventoryReport(await res.json())
+          if (res.ok) {
+            const d = await res.json()
+            setInventoryReport(d.data)
+          }
         } else if (activeTab === 'customers') {
           const res = await fetch('/api/reports/customers?days=90')
-          if (res.ok) setCustomersReport(await res.json())
+          if (res.ok) {
+            const d = await res.json()
+            setCustomersReport(d.data)
+          }
         }
       } catch (e) {
         console.error('Failed to load report:', e)
@@ -3432,8 +3456,8 @@ function SettingsView() {
       const res = await fetch('/api/settings')
       if (res.ok) {
         const d = await res.json()
-        setData(d)
-        setVenueName(d.config?.venueName || 'Singapore Club')
+        setData(d.data)
+        setVenueName(d.data.config?.venueName || 'Singapore Club')
       }
     } catch (e) {
       console.error('Failed to load settings:', e)
@@ -4356,7 +4380,7 @@ export default function Page() {
           shiftRes.json(),
         ])
         setData(dashData)
-        setProducts(prodData)
+        setProducts(prodData.data.products)
         if (shiftData.shift) setShift(shiftData.shift)
       } catch {
         setError(true)
@@ -4437,8 +4461,9 @@ export default function Page() {
     )
   }
 
-  const isAdmin = data.staff.roles.includes('ADMIN')
-  const userRoles = data.staff.roles
+  const dashboardData = data.data
+  const isAdmin = dashboardData.staff.roles.includes('ADMIN')
+  const userRoles = dashboardData.staff.roles
   const allNavItems = [
     ...navItems.filter((item) => item.roles.some((r) => userRoles.includes(r))),
     ...adminNavItems.filter((item) => item.roles.some((r) => userRoles.includes(r))),
@@ -4447,7 +4472,7 @@ export default function Page() {
   const renderView = () => {
     switch (activeNav) {
       case 'Overview':
-        return <OverviewView data={data} onOrderClick={fetchOrderDetail} />
+        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} />
       case 'Point of Sale':
         return (
           <>
@@ -4478,7 +4503,7 @@ export default function Page() {
         )
       case 'Orders':
         return <OrdersView
-          data={data}
+          data={dashboardData}
           onOrderClick={fetchOrderDetail}
           products={products}
           categories={categories}
@@ -4494,21 +4519,21 @@ export default function Page() {
           onCheckout={handleCheckout}
         />
       case 'Floor & Pool':
-        return <FloorView data={data} onRefresh={refreshDashboard} />
+        return <FloorView data={dashboardData} onRefresh={refreshDashboard} />
       case 'Inventory':
-        return <InventoryView data={data} onRefresh={refreshDashboard} />
+        return <InventoryView data={dashboardData} onRefresh={refreshDashboard} />
       case 'Customers':
-        return <CustomersView data={data} />
+        return <CustomersView data={dashboardData} />
       case 'Admin':
-        return <AdminView data={data} />
+        return <AdminView data={dashboardData} />
       case 'Reports':
-        return <ReportsView data={data} />
+        return <ReportsView data={dashboardData} />
       case 'Staff':
-        return <StaffView data={data} />
+        return <StaffView data={dashboardData} />
       case 'Settings':
         return <SettingsView />
       default:
-        return <OverviewView data={data} onOrderClick={fetchOrderDetail} />
+        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} />
     }
   }
 
@@ -4560,11 +4585,11 @@ export default function Page() {
             </button>
             <div className="mt-4 flex items-center gap-3 border-t border-white/[0.07] pt-4">
               <div className="flex size-8 items-center justify-center rounded-full bg-[#8a6655] text-xs font-semibold">
-                {getInitials(data.staff.name)}
+                {getInitials(dashboardData.staff.name)}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-xs font-medium">{data.staff.name}</p>
-                <p className="text-[10px] text-[#777971]">{roleLabels[data.staff.role] ?? data.staff.role}</p>
+                <p className="truncate text-xs font-medium">{dashboardData.staff.name}</p>
+                <p className="text-[10px] text-[#777971]">{roleLabels[dashboardData.staff.role] ?? dashboardData.staff.role}</p>
               </div>
               <ChevronDown className="ml-auto text-[#777971]" size={14} />
             </div>
@@ -4583,7 +4608,7 @@ export default function Page() {
             <div>
               <p className="text-[11px] uppercase tracking-[0.16em] text-[#73756f]">{formatDate()}</p>
               <h1 className="mt-1 text-xl font-semibold tracking-tight">
-                {getGreeting()}, {data.staff.name}
+                {getGreeting()}, {dashboardData.staff.name}
                 <span className="text-[#d8a85b]"> / </span>
                 <span className="text-[#96978f]">{activeNav}</span>
               </h1>
@@ -4609,7 +4634,7 @@ export default function Page() {
             )}
             <button className="relative rounded-md border border-white/[0.08] p-2 text-[#a5a69f] hover:bg-white/[0.05]">
               <Bell size={17} />
-              {data.lowStock.length > 0 && (
+              {dashboardData.lowStock.length > 0 && (
                 <span className="absolute right-1 top-1 size-1.5 rounded-full bg-[#dc8c72]" />
               )}
             </button>
@@ -4663,11 +4688,11 @@ export default function Page() {
                 </button>
                 <div className="mt-4 flex items-center gap-3 border-t border-white/[0.07] pt-4">
                   <div className="flex size-8 items-center justify-center rounded-full bg-[#8a6655] text-xs font-semibold">
-                    {getInitials(data.staff.name)}
+                    {getInitials(dashboardData.staff.name)}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-medium">{data.staff.name}</p>
-                    <p className="text-[10px] text-[#777971]">{roleLabels[data.staff.role] ?? data.staff.role}</p>
+                    <p className="truncate text-xs font-medium">{dashboardData.staff.name}</p>
+                    <p className="text-[10px] text-[#777971]">{roleLabels[dashboardData.staff.role] ?? dashboardData.staff.role}</p>
                   </div>
                 </div>
               </div>

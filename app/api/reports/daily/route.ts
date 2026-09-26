@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         GROUP BY EXTRACT(HOUR FROM "createdAt") ORDER BY hour
       ` as unknown as { hour: number; orders: number; revenue: string }[],
       prisma.$queryRaw`
-        SELECT p.name, SUM(oi.quantity)::int as sold, COALESCE(SUM(oi."totalPrice")::text, '0') as revenue
+        SELECT p.name, SUM(oi.quantity)::int as sold, COALESCE(SUM(oi.subtotal)::text, '0') as revenue
         FROM "OrderItem" oi JOIN "Product" p ON oi."productId" = p.id
         JOIN "Order" o ON oi."orderId" = o.id
         WHERE o."createdAt" >= ${start} AND o."createdAt" < ${end} AND o.status = 'PAID'
