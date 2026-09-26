@@ -91,6 +91,12 @@ export async function POST(request: NextRequest) {
       })
     } catch (clerkError) {
       console.error('Clerk invitation failed:', clerkError)
+      // Don't fail the request - staff profile is created
+      // But log the error so admin knows email might not have sent
+      return createdResponse({ 
+        staff: newStaff, 
+        warning: 'Staff created but invitation email may not have sent. Check Clerk dashboard.' 
+      })
     }
 
     return createdResponse({ staff: newStaff })

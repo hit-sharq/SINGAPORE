@@ -46,6 +46,281 @@ body { @apply bg-background text-foreground; font-family: Arial, Helvetica, sans
 @keyframes float { 50% { transform: translate(-30px, 20px) rotate(12deg); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; } }
 
+/* ===== RESPONSIVE UTILITIES ===== */
+
+/* Mobile-first responsive table wrapper */
+.responsive-table {
+  @apply overflow-x-auto -mx-4 px-4 pb-4;
+}
+.responsive-table table {
+  @apply min-w-full;
+}
+@media (min-width: 768px) {
+  .responsive-table {
+    @apply mx-0 px-0 pb-0;
+  }
+  .responsive-table table {
+    @apply min-w-auto;
+  }
+}
+
+/* Card layout for mobile tables */
+@media (max-width: 767px) {
+  .table-card-view thead {
+    @apply hidden;
+  }
+  .table-card-view tbody {
+    @apply block;
+  }
+  .table-card-view tr {
+    @apply block border border-white/[0.08] bg-[#181a17] rounded-lg p-4 mb-3;
+  }
+  .table-card-view td {
+    @apply block py-1 px-0 border-none;
+  }
+  .table-card-view td::before {
+    @apply font-semibold text-[#787a73] text-xs uppercase tracking-[0.1em] mr-2;
+    content: attr(data-label);
+  }
+}
+
+/* Responsive grid utilities */
+.grid-auto-fit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+@media (max-width: 640px) {
+  .grid-auto-fit {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile sidebar drawer */
+@media (max-width: 1023px) {
+  .sidebar-drawer {
+    @apply fixed inset-y-0 left-0 z-50 w-[280px] max-w-full bg-[#171815] border-r border-white/[0.07] shadow-xl transform transition-transform duration-300;
+  }
+  .sidebar-drawer.open {
+    @apply translate-x-0;
+  }
+  .sidebar-drawer.closed {
+    @apply -translate-x-full;
+  }
+  .sidebar-overlay {
+    @apply fixed inset-0 z-40 bg-black/50 lg:hidden;
+  }
+}
+
+/* Dashboard content spacing */
+@media (max-width: 1023px) {
+  .dashboard-content {
+    @apply pl-0;
+  }
+}
+
+/* Mobile-first modal sizing */
+.responsive-modal {
+  @apply w-full max-w-[95vw] mx-4 max-h-[90vh];
+}
+@media (min-width: 640px) {
+  .responsive-modal {
+    @apply max-w-[80vw] mx-auto;
+  }
+}
+@media (min-width: 1024px) {
+  .responsive-modal {
+    @apply max-w-5xl;
+  }
+}
+
+/* Touch-friendly targets */
+@media (max-width: 767px) {
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  .touch-target-sm {
+    @apply min-h-[40px] min-w-[40px];
+  }
+}
+
+/* Text sizing */
+@media (max-width: 640px) {
+  .text-responsive-xs { @apply text-[10px]; }
+  .text-responsive-sm { @apply text-[12px]; }
+  .text-responsive-base { @apply text-[14px]; }
+  .text-responsive-lg { @apply text-[16px]; }
+}
+
+/* Hide on mobile */
+@media (max-width: 767px) {
+  .hide-mobile { @apply hidden; }
+}
+
+/* Show only on mobile */
+@media (min-width: 768px) {
+  .mobile-only { @apply hidden; }
+}
+
+/* Flexible spacing */
+.space-responsive {
+  @apply space-y-4;
+}
+@media (min-width: 768px) {
+  .space-responsive {
+    @apply space-y-6;
+  }
+}
+
+/* Grid responsive helpers */
+.grid-responsive-2 {
+  @apply grid grid-cols-1 gap-4;
+}
+@media (min-width: 640px) {
+  .grid-responsive-2 { @apply grid-cols-2; }
+}
+@media (min-width: 1024px) {
+  .grid-responsive-2 { @apply grid-cols-2; }
+}
+
+.grid-responsive-3 {
+  @apply grid grid-cols-1 gap-4;
+}
+@media (min-width: 640px) {
+  .grid-responsive-3 { @apply grid-cols-2; }
+}
+@media (min-width: 1024px) {
+  .grid-responsive-3 { @apply grid-cols-3; }
+}
+
+.grid-responsive-4 {
+  @apply grid grid-cols-1 gap-4;
+}
+@media (min-width: 640px) {
+  .grid-responsive-4 { @apply grid-cols-2; }
+}
+@media (min-width: 1024px) {
+  .grid-responsive-4 { @apply grid-cols-4; }
+}
+
+/* Stats cards responsive */
+.stats-grid {
+  @apply grid grid-cols-2 gap-3;
+}
+@media (min-width: 640px) {
+  .stats-grid { @apply grid-cols-3; }
+}
+@media (min-width: 1024px) {
+  .stats-grid { @apply grid-cols-4; }
+}
+@media (min-width: 1280px) {
+  .stats-grid { @apply grid-cols-7; }
+}
+
+/* Admin view responsive tabs */
+@media (max-width: 767px) {
+  .admin-tabs {
+    @apply flex gap-1 overflow-x-auto pb-2 -mx-4 px-4;
+  }
+  .admin-tabs button {
+    @apply whitespace-nowrap flex-shrink-0;
+  }
+}
+
+/* Button groups responsive */
+@media (max-width: 640px) {
+  .btn-group-responsive {
+    @apply flex flex-col gap-2 w-full;
+  }
+  .btn-group-responsive button {
+    @apply w-full;
+  }
+}
+@media (min-width: 641px) {
+  .btn-group-responsive {
+    @apply flex gap-2;
+  }
+}
+
+/* Input groups responsive */
+@media (max-width: 640px) {
+  .input-group-responsive {
+    @apply flex flex-col gap-2;
+  }
+}
+@media (min-width: 641px) {
+  .input-group-responsive {
+    @apply flex gap-2;
+  }
+}
+
+/* Dashboard header responsive */
+@media (max-width: 767px) {
+  .dashboard-header {
+    @apply flex flex-col gap-3 items-start;
+  }
+  .dashboard-header-actions {
+    @apply w-full flex flex-col gap-2;
+  }
+  .dashboard-header-actions button {
+    @apply w-full;
+  }
+}
+
+/* Table cell responsive */
+@media (max-width: 767px) {
+  .td-responsive {
+    @apply px-3 py-2 text-xs;
+  }
+}
+@media (min-width: 768px) {
+  .td-responsive {
+    @apply px-4 py-3 text-sm;
+  }
+}
+
+/* Form layout responsive */
+@media (max-width: 767px) {
+  .form-grid {
+    @apply grid grid-cols-1 gap-4;
+  }
+}
+@media (min-width: 768px) {
+  .form-grid {
+    @apply grid grid-cols-2 gap-4;
+  }
+}
+@media (min-width: 1024px) {
+  .form-grid {
+    @apply grid grid-cols-4 gap-4;
+  }
+}
+
+/* Modal content scrolling */
+.modal-content {
+  @apply max-h-[calc(100vh-4rem)] overflow-y-auto px-4 pb-4;
+}
+@media (min-width: 640px) {
+  .modal-content {
+    @apply max-h-[calc(100vh-6rem)] px-6 pb-6;
+  }
+}
+
+/* Chart/Graph responsive */
+.chart-container {
+  @apply w-full h-[300px];
+}
+@media (min-width: 768px) {
+  .chart-container {
+    @apply h-[350px];
+  }
+}
+@media (min-width: 1024px) {
+  .chart-container {
+    @apply h-[400px];
+  }
+}
+
 /* Large screen optimizations for auth pages */
 @media (min-width: 1200px) {
   .auth-layout { width: min(100%, 72rem); min-height: 42rem; max-height: 85vh; }

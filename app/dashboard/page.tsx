@@ -589,8 +589,8 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
   if (!showSale) return null
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={() => setShowSale(false)}>
-      <div className="w-full max-w-5xl max-h-[90vh] flex flex-col border border-white/[0.1] bg-[#171815] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-2 sm:p-4 backdrop-blur-sm sm:items-center" onClick={() => setShowSale(false)}>
+      <div className="w-full max-w-5xl max-h-[90vh] sm:max-h-[90vh] flex flex-col border border-white/[0.1] bg-[#171815] shadow-2xl responsive-modal" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
           <div>
             <p className="text-[10px] uppercase tracking-[0.16em] text-[#d8a85b]">Point of sale</p>
@@ -611,7 +611,7 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
                 className="w-full border border-white/[0.1] bg-[#20221e] py-2.5 pl-10 pr-4 text-sm outline-none placeholder:text-[#666860] focus:border-[#d8a85b]/60"
               />
             </div>
-            <div className="my-4 flex gap-2 overflow-x-auto pb-1">
+            <div className="my-4 flex gap-2 overflow-x-auto pb-1 touch-target-sm">
               {categories.map((category) => (
                 <button
                   key={category}
@@ -626,7 +626,7 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
                 </button>
               ))}
             </div>
-            <div className="flex-1 min-h-0 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 max-h-[50vh] overflow-y-auto pb-4 pr-2">
+            <div className="flex-1 min-h-0 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 max-h-[50vh] overflow-y-auto pb-4 pr-2">
               {filteredProducts.length === 0 ? (
                 <p className="col-span-full text-xs text-[#777971]">No products found.</p>
               ) : (
@@ -636,7 +636,7 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
                     <button
                       key={product.id}
                       onClick={() => onAddToCart(product)}
-                      className="border border-white/[0.08] bg-[#1d1f1b] p-3 text-left transition hover:border-[#d8a85b]/60 hover:bg-[#24241e]"
+                      className="border border-white/[0.08] bg-[#1d1f1b] p-3 text-left transition hover:border-[#d8a85b]/60 hover:bg-[#24241e] touch-target"
                     >
                       <div
                         className={`mb-5 flex size-9 items-center justify-center rounded-md text-[#d8a85b] ${
@@ -675,7 +675,7 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
             ) : (
               <div className="space-y-3">
                 {cart.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between">
+                  <div key={item.id} className="flex items-center justify-between gap-3 p-3 border border-white/[0.08] bg-[#1d1f1b] rounded-lg">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium">{item.name}</p>
                       <p className="text-[10px] text-[#777971]">
@@ -684,9 +684,9 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
                     </div>
                     <button
                       onClick={() => onRemoveFromCart(item.id)}
-                      className="ml-2 text-[#777971] hover:text-[#dc8c72]"
+                      className="ml-2 text-[#777971] hover:text-[#dc8c72] touch-target-sm p-1"
                     >
-                      <X size={13} />
+                      <X size={15} />
                     </button>
                   </div>
                 ))}
@@ -1524,8 +1524,8 @@ function CustomersView({ data }: { data: DashboardData }) {
           Add Customer
         </button>
       </div>
-      <div className="border border-white/[0.08] bg-[#181a17] overflow-hidden">
-        <div className="grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.06] text-[10px] font-medium uppercase tracking-[0.1em] text-[#787a73]">
+      <div className="responsive-table">
+        <div className="table-card-view grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.06] text-[10px] font-medium uppercase tracking-[0.1em] text-[#787a73] border border-white/[0.08] bg-[#181a17]">
           <div>Name</div>
           <div>Phone</div>
           <div>Email</div>
@@ -1614,7 +1614,7 @@ function AdminView({ data }: { data: DashboardData }) {
           <p className="text-sm text-[#878981]">System administration and configuration</p>
         </div>
       </div>
-      <div className="flex gap-1 border-b border-white/[0.08] overflow-x-auto pb-1">
+      <div className="admin-tabs flex gap-1 border-b border-white/[0.08] overflow-x-auto pb-1">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -1813,7 +1813,7 @@ function IntegrationsView() {
           <Printer size={16} className="text-[#d8a85b]" />
           Printer Management
         </h3>
-        <div className="border border-white/[0.08] bg-[#181a17] rounded-lg overflow-hidden">
+        <div className="responsive-table">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
@@ -2057,7 +2057,7 @@ function AuditLogsView() {
         </div>
       </div>
 
-      <div className="border border-white/[0.08] bg-[#181a17] rounded-lg overflow-hidden">
+      <div className="responsive-table">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
@@ -2233,7 +2233,7 @@ function FeatureFlagsView() {
         </button>
       </form>
 
-      <div className="border border-white/[0.08] bg-[#181a17] rounded-lg overflow-hidden">
+      <div className="responsive-table">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
@@ -2434,12 +2434,13 @@ function DataExportView() {
         </button>
       </form>
 
-      <div className="border border-white/[0.08] bg-[#181a17] rounded-lg overflow-hidden">
+      <div className="border border-white/[0.08] bg-[#181a17] rounded-lg">
         <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
           <h4 className="font-semibold text-sm">Recent Exports</h4>
           <span className="text-xs text-[#787a73]">{pagination.total} total</span>
         </div>
-        <table className="w-full text-sm">
+        <div className="responsive-table">
+          <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
               <th className="px-4 py-2 text-[10px] font-medium uppercase tracking-[0.1em]">Entity</th>
@@ -2479,6 +2480,7 @@ function DataExportView() {
             )}
           </tbody>
         </table>
+      </div>
       </div>
 
       {pagination.total > 0 && (
@@ -2611,7 +2613,7 @@ function ReportsView({ data }: { data: DashboardData }) {
         </div>
         <div className="border border-white/[0.08] bg-[#181a17] p-4">
           <h3 className="font-semibold mb-3">Top Products</h3>
-          <div className="overflow-x-auto">
+          <div className="responsive-table">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
@@ -2642,7 +2644,7 @@ function ReportsView({ data }: { data: DashboardData }) {
       <div className="space-y-4">
         <div className="border border-white/[0.08] bg-[#181a17] p-4">
           <h3 className="font-semibold mb-3">Product Performance (Last {productsReport.periodDays} Days)</h3>
-          <div className="overflow-x-auto">
+          <div className="responsive-table">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
@@ -2731,7 +2733,7 @@ function ReportsView({ data }: { data: DashboardData }) {
         {reconReport.discrepancies.length > 0 && (
           <div className="border border-red-500/30 bg-red-500/10 p-4">
             <h3 className="font-semibold text-red-400 mb-2">Discrepancies Requiring Attention</h3>
-            <div className="overflow-x-auto">
+            <div className="responsive-table">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-red-400 border-b border-red-500/30">
@@ -2759,9 +2761,9 @@ function ReportsView({ data }: { data: DashboardData }) {
             </div>
           </div>
         )}
-        <div className="border border-white/[0.08] bg-[#181a17] p-4">
-          <h3 className="font-semibold mb-3">Shifts</h3>
-          <div className="overflow-x-auto">
+<div className="border border-white/[0.08] bg-[#181a17] p-4">
+          <h3 className="font-semibold mb-3">Recent Stock Movements</h3>
+          <div className="responsive-table">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
@@ -2816,7 +2818,7 @@ function ReportsView({ data }: { data: DashboardData }) {
         </div>
         <div className="border border-white/[0.08] bg-[#181a17] p-4">
           <h3 className="font-semibold mb-3">Staff Performance (Last {staffReport.periodDays} Days)</h3>
-          <div className="overflow-x-auto">
+          <div className="responsive-table">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
@@ -2885,7 +2887,7 @@ function ReportsView({ data }: { data: DashboardData }) {
         </div>
         <div className="border border-white/[0.08] bg-[#181a17] p-4">
           <h3 className="font-semibold mb-3">Product Stock Levels</h3>
-          <div className="overflow-x-auto">
+          <div className="responsive-table">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
@@ -2997,7 +2999,7 @@ function ReportsView({ data }: { data: DashboardData }) {
           </div>
           <div className="border border-white/[0.08] bg-[#181a17] p-4">
             <h3 className="font-semibold mb-3">Top 10 Customers</h3>
-            <div className="overflow-x-auto">
+            <div className="responsive-table">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
@@ -3025,7 +3027,7 @@ function ReportsView({ data }: { data: DashboardData }) {
         </div>
         <div className="border border-white/[0.08] bg-[#181a17] p-4">
           <h3 className="font-semibold mb-3">All Customers</h3>
-          <div className="overflow-x-auto">
+          <div className="responsive-table">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
@@ -3231,8 +3233,8 @@ function StaffView({ data }: { data: DashboardData }) {
       </div>
 
       <div className="staff-table-wrapper">
-        <div className="staff-grid border border-white/[0.08] bg-[#181a17] overflow-hidden">
-          <div className="grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.06] text-[10px] font-medium uppercase tracking-[0.1em] text-[#787a73]">
+        <div className="responsive-table">
+          <div className="table-card-view grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.06] text-[10px] font-medium uppercase tracking-[0.1em] text-[#787a73] border border-white/[0.08] bg-[#181a17]">
             <div>Name</div>
             <div>Email</div>
             <div>Primary Role</div>
@@ -3727,7 +3729,7 @@ function SettingsView() {
             </form>
             <div className="border border-white/[0.08] bg-[#181a17] p-4 rounded-lg">
               <h3 className="font-semibold mb-3">Existing Tax Rules</h3>
-              <div className="overflow-x-auto">
+              <div className="responsive-table">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
@@ -3786,7 +3788,7 @@ function SettingsView() {
             </form>
             <div className="border border-white/[0.08] bg-[#181a17] p-4 rounded-lg">
               <h3 className="font-semibold mb-3">Existing Discount Rules</h3>
-              <div className="overflow-x-auto">
+              <div className="responsive-table">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
@@ -3843,7 +3845,7 @@ function SettingsView() {
             </form>
             <div className="border border-white/[0.08] bg-[#181a17] p-4 rounded-lg">
               <h3 className="font-semibold mb-3">Configured Printers</h3>
-              <div className="overflow-x-auto">
+              <div className="responsive-table">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-[#787a73] border-b border-white/[0.06]">
@@ -4579,6 +4581,55 @@ export default function Page() {
 
   return (
     <main className="min-h-screen bg-[#111210] text-[#f3f0e9]">
+      {/* Mobile sidebar overlay */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMobileMenuOpen(false)}>
+          <div className="absolute inset-y-0 left-0 w-[280px] max-w-full bg-[#171815] border-r border-white/[0.07] shadow-xl sidebar-drawer open" onClick={(e) => e.stopPropagation()}>
+            <div className="flex h-[76px] items-center justify-between border-b border-white/[0.07] px-6">
+              <div className="flex size-9 items-center justify-center rounded-[10px] bg-[#d8a85b] text-[#171815]">
+                <Spade size={19} fill="currentColor" />
+              </div>
+              <button onClick={() => setMobileMenuOpen(false)} className="text-[#8c8e86] hover:text-white p-2">
+                <X size={20} />
+              </button>
+            </div>
+            <nav className="px-3 pt-7 flex flex-col gap-1">
+              {allNavItems.map(({ label, icon: Icon }) => (
+                <button
+                  key={label}
+                  onClick={() => { setActiveNav(label); setMobileMenuOpen(false); }}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition ${
+                    activeNav === label
+                      ? 'bg-[#d8a85b]/12 font-medium text-[#e5ba72]'
+                      : 'text-[#a4a59e] hover:bg-white/[0.04] hover:text-white'
+                  }`}
+                >
+                  <Icon size={17} strokeWidth={1.7} />
+                  {label}
+                </button>
+              ))}
+            </nav>
+            <div className="mt-auto border-t border-white/[0.07] p-4 space-y-2">
+              <button
+                onClick={() => { setActiveNav('Settings'); setMobileMenuOpen(false); }}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04] hover:text-white"
+              >
+                <Settings size={17} />
+                Settings
+              </button>
+              <button
+                onClick={() => { signOut({ redirectUrl: '/' }); setMobileMenuOpen(false); }}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04]"
+              >
+                <LogOut size={17} />
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-[228px] flex-col border-r border-white/[0.07] bg-[#171815] lg:flex">
         <Link href="/" className="flex h-[76px] items-center gap-3 border-b border-white/[0.07] px-6">
           <div className="flex size-9 items-center justify-center rounded-[10px] bg-[#d8a85b] text-[#171815]">
@@ -4636,8 +4687,8 @@ export default function Page() {
           </div>
       </aside>
 
-      <section className="lg:pl-[228px]">
-        <header className="flex h-[76px] items-center justify-between border-b border-white/[0.07] px-5 sm:px-8">
+      <section className="dashboard-content">
+        <header className="flex h-[76px] items-center justify-between border-b border-white/[0.07] px-4 sm:px-5 lg:px-8 dashboard-header">
           <div className="flex items-center gap-3">
             <button
               className="text-[#92948c] lg:hidden p-2 hover:bg-white/5 rounded transition"
@@ -4654,11 +4705,12 @@ export default function Page() {
               </h1>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 dashboard-header-actions">
             {shift ? (
-              <div className="hidden items-center gap-3 rounded-md border border-[#d8a85b]/30 bg-[#d8a85b]/10 px-3 py-2 text-xs text-[#d8a85b] sm:flex">
+              <div className="flex items-center gap-3 rounded-md border border-[#d8a85b]/30 bg-[#d8a85b]/10 px-3 py-2 text-xs text-[#d8a85b]">
                 <span className="size-1.5 rounded-full bg-[#7cc58f] shadow-[0_0_8px_#7cc58f]" />
-                Shift open · {formatTime(shift.startsAt)} · Float: {formatPrice(shift.openingCash)} · Cash: {formatPrice(shift.cashDrawer?.balance ?? '0')}
+                <span className="hidden sm:inline">Shift open · {formatTime(shift.startsAt)} · Float: {formatPrice(shift.openingCash)} · Cash: {formatPrice(shift.cashDrawer?.balance ?? '0')}</span>
+                <span className="sm:hidden">Open · {formatPrice(shift.openingCash)}</span>
                 <button onClick={() => setShowShiftModal(true)} className="ml-2 px-2 py-1 rounded text-[10px] bg-[#d8a85b]/20 hover:bg-[#d8a85b]/30">
                   Manage
                 </button>
@@ -4666,7 +4718,7 @@ export default function Page() {
             ) : (
               <button
                 onClick={() => setShowShiftModal(true)}
-                className="hidden items-center gap-2 rounded-md border border-[#d8a85b]/30 bg-[#d8a85b]/10 px-3 py-2 text-xs text-[#d8a85b] hover:bg-[#d8a85b]/20 sm:flex"
+                className="flex items-center gap-2 rounded-md border border-[#d8a85b]/30 bg-[#d8a85b]/10 px-3 py-2 text-xs text-[#d8a85b] hover:bg-[#d8a85b]/20"
               >
                 <span className="size-1.5 rounded-full bg-[#d8a85b]" />
                 Open Shift
@@ -4680,65 +4732,6 @@ export default function Page() {
             </button>
           </div>
         </header>
-
-        {mobileMenuOpen && (
-          <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMobileMenuOpen(false)}>
-            <div className="absolute inset-y-0 left-0 w-[280px] max-w-full bg-[#171815] border-r border-white/[0.07] shadow-xl" onClick={(e) => e.stopPropagation()}>
-              <div className="flex h-[76px] items-center justify-between border-b border-white/[0.07] px-6">
-                <div className="flex size-9 items-center justify-center rounded-[10px] bg-[#d8a85b] text-[#171815]">
-                  <Spade size={19} fill="currentColor" />
-                </div>
-                <button onClick={() => setMobileMenuOpen(false)} className="text-[#92948c]">
-                  <X size={22} />
-                </button>
-              </div>
-              <div className="px-3 pt-7">
-                <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#71736c]">Workspace</p>
-                <nav className="flex flex-col gap-1">
-                  {allNavItems.map(({ label, icon: Icon }) => (
-                    <button
-                      key={label}
-                      onClick={() => { setActiveNav(label); setMobileMenuOpen(false); }}
-                      className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition ${
-                        activeNav === label
-                          ? 'bg-[#d8a85b]/12 font-medium text-[#e5ba72]'
-                          : 'text-[#a4a59e] hover:bg-white/[0.04] hover:text-white'
-                      }`}
-                    >
-                      <Icon size={17} strokeWidth={1.7} />
-                      {label}
-                    </button>
-                  ))}
-                </nav>
-              </div>
-              <div className="mt-auto border-t border-white/[0.07] p-4">
-                <button
-                  onClick={() => { setActiveNav('Settings'); setMobileMenuOpen(false); }}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04] hover:text-white"
-                >
-                  <Settings size={17} />
-                  Settings
-                </button>
-                <button
-                  onClick={() => { signOut({ redirectUrl: '/' }); setMobileMenuOpen(false); }}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04]"
-                >
-                  <LogOut size={17} />
-                  Sign Out
-                </button>
-                <div className="mt-4 flex items-center gap-3 border-t border-white/[0.07] pt-4">
-                  <div className="flex size-8 items-center justify-center rounded-full bg-[#8a6655] text-xs font-semibold">
-                    {getInitials(dashboardData.staff.name)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-medium">{dashboardData.staff.name}</p>
-                    <p className="text-[10px] text-[#777971]">{roleLabels[dashboardData.staff.role] ?? dashboardData.staff.role}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         <div className="mx-auto max-w-[1500px] p-5 sm:p-8">
           {activeNav !== 'Overview' && (
