@@ -555,7 +555,7 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
 
   return (
     <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center" onClick={() => setShowSale(false)}>
-      <div className="w-full max-w-5xl border border-white/[0.1] bg-[#171815] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-5xl max-h-[90vh] flex flex-col border border-white/[0.1] bg-[#171815] shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
           <div>
             <p className="text-[10px] uppercase tracking-[0.16em] text-[#d8a85b]">Point of sale</p>
@@ -591,7 +591,7 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 max-h-[50vh] overflow-y-auto pb-4 pr-2">
               {filteredProducts.length === 0 ? (
                 <p className="col-span-full text-xs text-[#777971]">No products found.</p>
               ) : (
