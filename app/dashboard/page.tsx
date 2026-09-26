@@ -1592,15 +1592,13 @@ function CustomersView({ data }: { data: DashboardData }) {
 }
 
 function AdminView({ data }: { data: DashboardData }) {
-  const [activeTab, setActiveTab] = useState<'staff' | 'settings' | 'integrations' | 'audit' | 'flags' | 'export'>('staff')
-
-  const tabs = [
-    { id: 'staff', label: 'Staff Management', icon: UserCog, desc: 'Manage roles, permissions, and invites' },
-    { id: 'settings', label: 'System Settings', icon: Settings, desc: 'Venue config, tax rules, receipt templates' },
-    { id: 'integrations', label: 'Integrations', icon: CreditCard, desc: 'Pesapal, printers, payment terminals' },
-    { id: 'audit', label: 'Audit Logs', icon: ClipboardList, desc: 'Track all system changes and actions' },
-    { id: 'flags', label: 'Feature Flags', icon: Activity, desc: 'Toggle features across the venue' },
-    { id: 'export', label: 'Data Export', icon: Truck, desc: 'Export reports and backups' },
+  const adminItems = [
+    { href: '/dashboard/admin/staff', label: 'Staff Management', icon: UserCog, desc: 'Manage roles, permissions, and invites' },
+    { href: '/dashboard/settings', label: 'System Settings', icon: Settings, desc: 'Venue config, tax rules, receipt templates' },
+    { href: '/dashboard/admin/integrations', label: 'Integrations', icon: CreditCard, desc: 'Pesapal, printers, payment terminals' },
+    { href: '/dashboard/admin/audit', label: 'Audit Logs', icon: ClipboardList, desc: 'Track all system changes and actions' },
+    { href: '/dashboard/admin/flags', label: 'Feature Flags', icon: Activity, desc: 'Toggle features across the venue' },
+    { href: '/dashboard/admin/export', label: 'Data Export', icon: Truck, desc: 'Export reports and backups' },
   ] as const
 
   return (
@@ -1614,29 +1612,22 @@ function AdminView({ data }: { data: DashboardData }) {
           <p className="text-sm text-[#878981]">System administration and configuration</p>
         </div>
       </div>
-      <div className="admin-tabs flex gap-1 border-b border-white/[0.08] overflow-x-auto pb-1">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 text-sm whitespace-nowrap transition ${
-              activeTab === tab.id
-                ? 'text-[#d8a85b] border-b-2 border-[#d8a85b]'
-                : 'text-[#787a73] hover:text-white'
-            }`}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {adminItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="border border-white/[0.08] bg-[#181a17] p-5 rounded-lg hover:border-[#d8a85b]/50 hover:bg-white/[0.02] transition"
           >
-            <tab.icon size={15} />
-            {tab.label}
-          </button>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-[#d8a85b]/10 text-[#d8a85b]">
+                <item.icon size={18} />
+              </div>
+              <h3 className="font-semibold">{item.label}</h3>
+            </div>
+            <p className="text-xs text-[#878981]">{item.desc}</p>
+          </Link>
         ))}
-      </div>
-      <div className="border border-white/[0.08] bg-[#181a17] rounded-lg p-6 min-h-[400px]">
-        {activeTab === 'staff' && <StaffView data={data} />}
-        {activeTab === 'settings' && <SettingsView />}
-        {activeTab === 'integrations' && <IntegrationsView />}
-        {activeTab === 'audit' && <AuditLogsView />}
-        {activeTab === 'flags' && <FeatureFlagsView />}
-        {activeTab === 'export' && <DataExportView />}
       </div>
     </div>
   )
