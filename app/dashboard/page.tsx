@@ -134,18 +134,18 @@ type POSViewProps = {
 }
 
 const navItems = [
-  { label: 'Overview', icon: LayoutDashboard, roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER', 'INVENTORY_MANAGER'] },
-  { label: 'Point of Sale', icon: ShoppingBag, roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER'] },
-  { label: 'Orders', icon: CircleDollarSign, roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER'] },
-  { label: 'Floor & Pool', icon: Table2, roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER'] },
-  { label: 'Inventory', icon: Package, roles: ['ADMIN', 'MANAGER', 'INVENTORY_MANAGER'] },
-  { label: 'Customers', icon: Users, roles: ['ADMIN', 'MANAGER'] },
+  { label: 'Overview', icon: LayoutDashboard, href: '/dashboard', roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER', 'INVENTORY_MANAGER'] },
+  { label: 'Point of Sale', icon: ShoppingBag, href: '/dashboard/pos', roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER'] },
+  { label: 'Orders', icon: CircleDollarSign, href: '/dashboard/orders', roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER'] },
+  { label: 'Floor & Pool', icon: Table2, href: '/dashboard/floor', roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER'] },
+  { label: 'Inventory', icon: Package, href: '/dashboard/inventory', roles: ['ADMIN', 'MANAGER', 'INVENTORY_MANAGER'] },
+  { label: 'Customers', icon: Users, href: '/dashboard/customers', roles: ['ADMIN', 'MANAGER'] },
 ]
 
 const adminNavItems = [
-  { label: 'Admin', icon: Shield, roles: ['ADMIN'] },
-  { label: 'Reports', icon: BarChart3, roles: ['ADMIN', 'MANAGER'] },
-  { label: 'Staff', icon: UserCog, roles: ['ADMIN'] },
+  { label: 'Admin', icon: Shield, href: '/dashboard/admin/staff', roles: ['ADMIN'] },
+  { label: 'Reports', icon: BarChart3, href: '/dashboard/reports/daily', roles: ['ADMIN', 'MANAGER'] },
+  { label: 'Staff', icon: UserCog, href: '/dashboard/admin/staff', roles: ['ADMIN'] },
 ]
 
 const roleLabels: Record<string, string> = {
@@ -4299,17 +4299,14 @@ export default function Page() {
   const [error, setError] = useState(false)
 
   const [activeNav, setActiveNav] = useState('Overview')
-  const [activeCategory, setActiveCategory] = useState('All items')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const [cart, setCart] = useState<CartItem[]>([])
-  const [showSale, setShowSale] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null)
   const [shift, setShift] = useState<{ id: string; startsAt: string; openingCash: string; cashDrawer: { balance: string } | null; cashTransactions: Array<{ type: string; amount: string; reason: string; createdAt: string }> } | null>(null)
   const [showShiftModal, setShowShiftModal] = useState(false)
   const [openingCash, setOpeningCash] = useState('0')
   const [closingCash, setClosingCash] = useState('')
   const [shiftProcessing, setShiftProcessing] = useState(false)
+  const [showSale, setShowSale] = useState(false)
 
   async function fetchShift() {
     try {
@@ -4420,78 +4417,12 @@ export default function Page() {
       } finally {
         setLoading(false)
       }
-    }
+}
     fetchData()
   }, [])
 
-  const categories = useMemo(() => {
-    const cats = Array.from(new Set(products.map((p) => p.category.name)))
-    return ['All items', ...cats]
-  }, [products])
-
-  const filteredProducts = useMemo(
-    () =>
-      products.filter(
-        (product) =>
-          (activeCategory === 'All items' || product.category.name === activeCategory) &&
-          product.name.toLowerCase().includes(query.toLowerCase()),
-      ),
-    [products, activeCategory, query],
-  )
-
-  const cartTotal = cart.reduce((sum, item) => sum + parseFloat(item.price) * item.quantity, 0)
-
-  function addToCart(product: Product) {
-    setCart((current) => {
-      const found = current.find((item) => item.id === product.id)
-      return found
-        ? current.map((item) => (item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item))
-        : [...current, { ...product, quantity: 1 }]
-    })
-  }
-
-  function removeFromCart(productId: string) {
-    setCart((current) => current.filter((item) => item.id !== productId))
-  }
-
-  async function handleCheckout() {
-    if (cart.length === 0) return
-
-    const items = cart.map((item) => ({
-      productId: item.id,
-      quantity: item.quantity,
-    }))
-
-    try {
-      const response = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to create order')
-      }
-
-      setCart([])
-      setShowSale(false)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Checkout failed'
-      alert(message)
-    }
-  }
-
-  if (loading) {
-    return <DashboardSkeleton />
-  }
-
-  if (error || !data) {
-    return (
-      <div className="min-h-screen bg-[#111210] flex items-center justify-center">
-        <div className="text-[#dc8c72]">Unable to load data. Please try again.</div>
-      </div>
-    )
+  if (!data) {
+    return null
   }
 
   const dashboardData = data.data
@@ -4503,71 +4434,7 @@ export default function Page() {
   ]
 
   const renderView = () => {
-    switch (activeNav) {
-      case 'Overview':
-        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} setShowSale={setShowSale} setActiveNav={setActiveNav} />
-      case 'Point of Sale':
-        return (
-          <>
-            <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-[#d8a85b]">Point of sale</p>
-                <h2 className="text-3xl font-semibold tracking-[-0.03em]">Create new tab</h2>
-                <p className="mt-2 text-sm text-[#878981]">Add products to the cart and send to a table</p>
-              </div>
-            </div>
-            <POSView
-              products={products}
-              categories={categories}
-              activeCategory={activeCategory}
-              query={query}
-              filteredProducts={filteredProducts}
-              cart={cart}
-              onCategoryChange={setActiveCategory}
-              onQueryChange={setQuery}
-              onAddToCart={addToCart}
-              onRemoveFromCart={removeFromCart}
-              cartTotal={cartTotal}
-              onCheckout={handleCheckout}
-              showSale={showSale}
-              setShowSale={setShowSale}
-            />
-          </>
-        )
-      case 'Orders':
-        return <OrdersView
-          data={dashboardData}
-          onOrderClick={fetchOrderDetail}
-          products={products}
-          categories={categories}
-          activeCategory={activeCategory}
-          query={query}
-          filteredProducts={filteredProducts}
-          cart={cart}
-          onCategoryChange={setActiveCategory}
-          onQueryChange={setQuery}
-          onAddToCart={addToCart}
-          onRemoveFromCart={removeFromCart}
-          cartTotal={cartTotal}
-          onCheckout={handleCheckout}
-        />
-      case 'Floor & Pool':
-        return <FloorView data={dashboardData} onRefresh={refreshDashboard} />
-      case 'Inventory':
-        return <InventoryView data={dashboardData} onRefresh={refreshDashboard} />
-      case 'Customers':
-        return <CustomersView data={dashboardData} />
-      case 'Admin':
-        return <AdminView data={dashboardData} />
-      case 'Reports':
-        return <ReportsView data={dashboardData} />
-      case 'Staff':
-        return <StaffView data={dashboardData} />
-      case 'Settings':
-        return <SettingsView />
-      default:
-        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} setShowSale={setShowSale} setActiveNav={setActiveNav} />
-    }
+    return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} setShowSale={setShowSale} setActiveNav={setActiveNav} />
   }
 
   return (
@@ -4585,10 +4452,11 @@ export default function Page() {
               </button>
             </div>
             <nav className="px-3 pt-7 flex flex-col gap-1">
-              {allNavItems.map(({ label, icon: Icon }) => (
-                <button
+              {allNavItems.map(({ label, icon: Icon, href }) => (
+                <Link
                   key={label}
-                  onClick={() => { setActiveNav(label); setMobileMenuOpen(false); }}
+                  href={href}
+                  onClick={() => setMobileMenuOpen(false)}
                   className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition ${
                     activeNav === label
                       ? 'bg-[#d8a85b]/12 font-medium text-[#e5ba72]'
@@ -4597,17 +4465,18 @@ export default function Page() {
                 >
                   <Icon size={17} strokeWidth={1.7} />
                   {label}
-                </button>
+                </Link>
               ))}
             </nav>
             <div className="mt-auto border-t border-white/[0.07] p-4 space-y-2">
-              <button
-                onClick={() => { setActiveNav('Settings'); setMobileMenuOpen(false); }}
+              <Link
+                href="/dashboard/settings"
+                onClick={() => setMobileMenuOpen(false)}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04] hover:text-white"
               >
                 <Settings size={17} />
                 Settings
-              </button>
+              </Link>
               <button
                 onClick={() => { signOut({ redirectUrl: '/' }); setMobileMenuOpen(false); }}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04]"
@@ -4634,10 +4503,10 @@ export default function Page() {
         <div className="px-3 pt-7">
           <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#71736c]">Workspace</p>
           <nav className="flex flex-col gap-1">
-            {allNavItems.map(({ label, icon: Icon }) => (
-              <button
+            {allNavItems.map(({ label, icon: Icon, href }) => (
+              <Link
                 key={label}
-                onClick={() => setActiveNav(label)}
+                href={href}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition ${
                   activeNav === label
                     ? 'bg-[#d8a85b]/12 font-medium text-[#e5ba72]'
@@ -4646,18 +4515,18 @@ export default function Page() {
               >
                 <Icon size={17} strokeWidth={1.7} />
                 {label}
-              </button>
+              </Link>
             ))}
           </nav>
         </div>
           <div className="mt-auto border-t border-white/[0.07] p-4">
-            <button
-              onClick={() => setActiveNav('Settings')}
+            <Link
+              href="/dashboard/settings"
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04] hover:text-white"
             >
               <Settings size={17} />
               Settings
-            </button>
+            </Link>
             <button
               onClick={() => signOut({ redirectUrl: '/' })}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-[#a4a59e] hover:bg-white/[0.04]"
