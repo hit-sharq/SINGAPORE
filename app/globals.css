@@ -19,14 +19,14 @@ body { @apply bg-background text-foreground; font-family: Arial, Helvetica, sans
 .animate-fade-up { animation: fade-up .7s cubic-bezier(.2,.8,.2,1) both; }
 .animate-fade-in { animation: fade-in .9s cubic-bezier(.2,.8,.2,1) .12s both; }
 
-.auth-stage { min-height: 100vh; padding: 6rem 1.5rem 3rem; position: relative; overflow: hidden; background: radial-gradient(circle at 50% 10%, oklch(.28 .045 145 / .45), transparent 42%), var(--background); }
+.auth-stage { min-height: 100vh; padding: 2rem 1rem 1.5rem; position: relative; overflow: hidden; background: radial-gradient(circle at 50% 10%, oklch(.28 .045 145 / .45), transparent 42%), var(--background); }
 .auth-stage::before { content: ''; position: absolute; width: 32rem; height: 32rem; border: 1px solid oklch(.76 .115 82 / .18); border-radius: 999px; top: -18rem; right: -8rem; animation: float 12s ease-in-out infinite; }
-.auth-brand { position: absolute; z-index: 2; top: 1.5rem; left: 1.5rem; display: flex; align-items: center; gap: .65rem; font-weight: 600; letter-spacing: -.02em; }
-.auth-brand span { display: grid; place-items: center; width: 2.2rem; height: 2.2rem; border-radius: .7rem; background: var(--primary); color: var(--primary-foreground); }
-.auth-layout { position: relative; z-index: 1; display: grid; width: min(100%, 70rem); max-height: 90vh; min-height: 42rem; margin: 0 auto; overflow: hidden; border: 1px solid var(--border); border-radius: 1.75rem; background: oklch(.15 .015 105 / .92); box-shadow: 0 30px 100px oklch(0 0 0 / .38); animation: fade-up .7s cubic-bezier(.2,.8,.2,1) both; }
-.auth-panel { padding: clamp(2rem, 5vw, 5rem); overflow: auto; }
+.auth-brand { position: absolute; z-index: 2; top: 1rem; left: 1rem; display: flex; align-items: center; gap: .5rem; font-weight: 600; letter-spacing: -.02em; font-size: .9rem; }
+.auth-brand span { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: .6rem; background: var(--primary); color: var(--primary-foreground); }
+.auth-layout { position: relative; z-index: 1; display: grid; width: min(100%, 64rem); max-height: 80vh; min-height: 32rem; margin: 0 auto; overflow: hidden; border: 1px solid oklch(1 0 0 / 18%); border-radius: 1.25rem; background: linear-gradient(145deg, oklch(1 0 0 / 8%), oklch(1 0 0 / 3%)); backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); box-shadow: 0 4px 24px oklch(0 0 0 / 25%), 0 0 0 1px oklch(1 0 0 / 5%) inset, 0 1px 0 oklch(1 0 0 / 8%) inset; animation: fade-up .7s cubic-bezier(.2,.8,.2,1) both; }
+.auth-panel { padding: clamp(1rem, 3vw, 2.5rem); overflow: auto; background: transparent; }
 .auth-panel-copy { display: flex; flex-direction: column; justify-content: space-between; min-height: 100%; background: linear-gradient(135deg, oklch(.28 .055 145 / .94), oklch(.17 .02 105 / .94) 65%), radial-gradient(circle at 80% 20%, oklch(.76 .115 82 / .2), transparent 30%); overflow: auto; }
-.auth-panel-form { display: flex; flex-direction: column; justify-content: center; background: oklch(.11 .01 105 / .68); overflow: auto; }
+.auth-panel-form { display: flex; flex-direction: column; justify-content: center; background: linear-gradient(180deg, oklch(1 0 0 / 2%), transparent); overflow: auto; }
 .auth-back { display: inline-flex; align-items: center; gap: .5rem; width: fit-content; color: var(--muted-foreground); font-size: .8rem; transition: color .2s, transform .2s; }
 .auth-back:hover { color: var(--foreground); transform: translateX(-.2rem); }
 .auth-message { max-width: 27rem; }
@@ -39,7 +39,7 @@ body { @apply bg-background text-foreground; font-family: Arial, Helvetica, sans
 .auth-copy { margin-bottom: 1.5rem; }
 .auth-copy h2 { margin-top: .75rem; font-size: 2.3rem; line-height: 1.05; letter-spacing: -.05em; }
 .auth-copy p:last-child { margin-top: .7rem; color: var(--muted-foreground); font-size: .9rem; line-height: 1.5; }
-.auth-clerk-card { width: 100%; padding: 0; box-shadow: none; background: transparent; }
+.auth-clerk-card { width: 100%; padding: 0; box-shadow: none; background: linear-gradient(145deg, oklch(1 0 0 / 6%), oklch(1 0 0 / 2%)); backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%); border: 1px solid oklch(1 0 0 / 12%); border-radius: 1rem; }
 @media (min-width: 760px) { .auth-layout { grid-template-columns: 1fr .86fr; } }
 @media (max-width: 759px) { .auth-stage { padding: 5.5rem 1rem 1rem; } .auth-layout { min-height: auto; max-height: none; } .auth-panel-copy { min-height: 20rem; } .auth-panel-form { padding-top: 2.5rem; } }
 @media (max-width: 480px) { .auth-stage { padding: 4rem 0.75rem 1rem; } .auth-layout { min-height: auto; max-height: none; } .auth-brand { top: 1rem; left: 1rem; } .auth-message { margin-bottom: 1.5rem; } .auth-dots { margin: 1rem 0; } }
@@ -48,23 +48,23 @@ body { @apply bg-background text-foreground; font-family: Arial, Helvetica, sans
 
 /* Large screen optimizations for auth pages */
 @media (min-width: 1200px) {
-  .auth-layout { width: min(100%, 80rem); min-height: 50rem; max-height: 90vh; }
-  .auth-panel-copy { padding: clamp(3rem, 6vw, 7rem); }
-  .auth-message { max-width: 34rem; }
-  .auth-message h1 { max-width: 28rem; font-size: clamp(3rem, 4vw, 5.5rem); }
-  .auth-message p:last-child { max-width: 28rem; font-size: 1.1rem; }
-  .auth-copy h2 { font-size: 2.8rem; }
-  .auth-copy p:last-child { font-size: 1rem; }
+  .auth-layout { width: min(100%, 72rem); min-height: 42rem; max-height: 85vh; }
+  .auth-panel-copy { padding: clamp(2rem, 5vw, 5rem); }
+  .auth-message { max-width: 30rem; }
+  .auth-message h1 { max-width: 24rem; font-size: clamp(2.5rem, 3.5vw, 4.5rem); }
+  .auth-message p:last-child { max-width: 24rem; font-size: 1rem; }
+  .auth-copy h2 { font-size: 2.5rem; }
+  .auth-copy p:last-child { font-size: 0.95rem; }
 }
 @media (min-width: 1600px) {
-  .auth-layout { width: min(100%, 90rem); min-height: 56rem; max-height: 90vh; }
+  .auth-layout { width: min(100%, 80rem); min-height: 46rem; max-height: 85vh; }
   .auth-brand { top: 2rem; left: 2rem; font-size: 1.25rem; }
   .auth-brand span { width: 2.8rem; height: 2.8rem; }
 }
 @media (min-width: 2000px) {
-  .auth-layout { width: min(100%, 100rem); min-height: 62rem; max-height: 90vh; }
-  .auth-message { max-width: 40rem; }
-  .auth-message h1 { max-width: 32rem; font-size: clamp(3.5rem, 3.5vw, 6rem); }
+  .auth-layout { width: min(100%, 90rem); min-height: 50rem; max-height: 85vh; }
+  .auth-message { max-width: 36rem; }
+  .auth-message h1 { max-width: 28rem; font-size: clamp(3rem, 3vw, 5rem); }
 }
 
 /* Staff table responsive */

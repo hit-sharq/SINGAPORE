@@ -3,12 +3,15 @@ import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
 import { z } from 'zod'
+import { createClerkClient } from '@clerk/nextjs/server'
 
 const inviteSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
   role: z.nativeEnum(Role),
 })
+
+const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
 
 export async function GET() {
   try {
@@ -53,6 +56,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Staff with this email already exists' }, { status: 400 })
     }
 
+    // Create staff profile with INVITED status
     const newStaff = await prisma.staffProfile.create({
       data: {
         clerkUserId: `pending_${Date.now()}`,
@@ -62,6 +66,21 @@ export async function POST(request: Request) {
         status: 'INVITED',
       },
     })
+
+    // Send Clerk invitation email
+    try {
+      await clerkClient.invitations.createInvitation({
+        emailAddress: email,
+        publicMetadata: {
+          staffId: newStaff.id,
+          role: role,
+        },
+        redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/sign-up`,
+      })
+    } catch (clerkError) {
+      console.error('Clerk invitation failed:', clerkError)
+      // Don't fail the request - staff record created, admin can resend
+    }
 
     return NextResponse.json({ staff: newStaff }, { status: 201 })
   } catch (error) {
