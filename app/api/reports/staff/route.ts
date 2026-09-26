@@ -1,9 +1,14 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
+import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
-export async function GET(request: Request) {
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+export async function GET(request: NextRequest) {
   try {
     await requireRole([Role.ADMIN, Role.MANAGER])
     const { searchParams } = new URL(request.url)
@@ -49,7 +54,7 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json({
+    return successResponse({
       periodDays: days,
       staff: staff.map((s) => {
         const sales = staffSales.find((ss) => ss.id === s.id)
@@ -69,8 +74,10 @@ export async function GET(request: Request) {
       }),
     })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to load staff performance' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view staff performance', 403, undefined, getPath(request))
+    }
+    console.error('GET /api/reports/staff error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load staff performance', 500, undefined, getPath(request))
   }
 }

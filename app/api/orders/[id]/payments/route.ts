@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
@@ -8,10 +8,12 @@ import {
   PesapalError,
 } from '@/lib/pesapal'
 import { Role, PaymentMethod, PaymentStatus, OrderStatus } from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
 const paymentSchema = z.object({
   method: z.nativeEnum(PaymentMethod),
-  amount: z.string().regex(/^\d+(\.\d{1,2})?$/),
+  amount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid amount format'),
   currency: z.string().default('KES'),
   pesapalOrderId: z.string().optional(),
   merchantRef: z.string().optional(),
@@ -25,31 +27,56 @@ function generateMerchantRef(orderNumber: number, paymentId: string): string {
   return `ORD-${orderNumber}-${paymentId.slice(-6).toUpperCase()}`
 }
 
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+function formatPayment(payment: any) {
+  return {
+    ...payment,
+    amount: payment.amount.toString(),
+  }
+}
+
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const staff = await requireRole([Role.ADMIN, Role.MANAGER, Role.CASHIER, Role.BARTENDER, Role.WAITER])
     const { id } = await params
     const body = await request.json()
-    const { method, amount, currency, pesapalOrderId, merchantRef } = paymentSchema.parse(body)
+    const parsed = paymentSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid payment data', 400, parsed.error.issues, getPath(request))
+    }
+
+    const { method, amount, currency, pesapalOrderId, merchantRef } = parsed.data
 
     const order = await prisma.order.findUnique({
       where: { id },
       include: { payments: true },
     })
 
-    if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    if (!order) {
+      return errorResponse(ErrorCodes.NOT_FOUND, 'Order not found', 404, undefined, getPath(request))
+    }
 
     const paidAmount = order.payments
       .filter((p) => p.status === 'COMPLETED')
-      .reduce((sum, p) => sum.plus(p.amount), new (require('@prisma/client').Prisma.Decimal)(0))
+      .reduce((sum, p) => sum.plus(p.amount), new Prisma.Decimal(0))
     const outstanding = order.total.minus(paidAmount)
 
-    const paymentAmount = new (require('@prisma/client').Prisma.Decimal)(amount)
+    const paymentAmount = new Prisma.Decimal(amount)
     if (paymentAmount.greaterThan(outstanding)) {
-      return NextResponse.json({ error: `Payment exceeds outstanding amount (${outstanding.toString()})` }, { status: 400 })
+      return errorResponse(
+        ErrorCodes.VALIDATION_ERROR,
+        `Payment exceeds outstanding amount (${outstanding.toString()})`,
+        400,
+        { field: 'amount', outstanding: outstanding.toString() },
+        getPath(request)
+      )
     }
 
     const payment = await prisma.$transaction(async (tx) => {
@@ -112,9 +139,8 @@ export async function POST(
         const ipnUrl = ipnSetting?.value
 
         if (!consumerKey || !consumerSecret) {
-          return NextResponse.json({
-            ...payment,
-            amount: payment.amount.toString(),
+          return successResponse({
+            ...formatPayment(payment),
             warning: 'PesaPal credentials not configured',
           })
         }
@@ -122,9 +148,8 @@ export async function POST(
         const merchantRef = generateMerchantRef(order.number, payment.id)
         const callbackUrl = ipnUrl || PESA_PAL_REDIRECT_URL
         if (!callbackUrl) {
-          return NextResponse.json({
-            ...payment,
-            amount: payment.amount.toString(),
+          return successResponse({
+            ...formatPayment(payment),
             warning: 'No callback URL configured',
           })
         }
@@ -164,9 +189,8 @@ export async function POST(
           },
         })
 
-        return NextResponse.json({
-          ...payment,
-          amount: payment.amount.toString(),
+        return successResponse({
+          ...formatPayment(payment),
           merchantRef,
           pesapalOrderId: result.pesapal_transaction_id,
           redirectUrl: result.redirect_url,
@@ -187,35 +211,37 @@ export async function POST(
               toStatus: PaymentStatus.FAILED,
             },
           })
-          return NextResponse.json({
-            ...payment,
-            amount: payment.amount.toString(),
-            error: err.message,
-          }, { status: 502 })
+          return errorResponse(
+            ErrorCodes.SERVICE_UNAVAILABLE,
+            err.message,
+            502,
+            { payment: formatPayment(payment), error: err.message },
+            getPath(request)
+          )
         }
         throw err
       }
     }
 
-    return NextResponse.json({
-      ...payment,
-      amount: payment.amount.toString(),
-    }, { status: 201 })
+    return createdResponse(formatPayment(payment))
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    if (error instanceof z.ZodError)
-      return NextResponse.json({ error: error.issues }, { status: 400 })
-    return NextResponse.json({ error: 'Unable to process payment' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to process payments', 403, undefined, getPath(request))
+    }
+    if (error instanceof z.ZodError) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid payment data', 400, error.issues, getPath(request))
+    }
+    console.error('POST /api/orders/[id]/payments error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to process payment', 500, undefined, getPath(request))
   }
 }
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const staff = await requireRole(Object.values(Role))
+    await requireRole(Object.values(Role))
     const { id } = await params
 
     const payments = await prisma.payment.findMany({
@@ -223,10 +249,14 @@ export async function GET(
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json(payments.map((p) => ({ ...p, amount: p.amount.toString() })))
+    return successResponse({
+      payments: payments.map(formatPayment),
+    })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to load payments' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view payments', 403, undefined, getPath(request))
+    }
+    console.error('GET /api/orders/[id]/payments error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load payments', 500, undefined, getPath(request))
   }
 }

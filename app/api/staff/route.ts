@@ -1,21 +1,26 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
 import { z } from 'zod'
 import { createClerkClient } from '@clerk/nextjs/server'
+import { errorResponse, createdResponse, ErrorCodes } from '@/lib/api/response'
 
 const inviteSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(1),
+  email: z.string().email('Invalid email address'),
+  name: z.string().min(1, 'Name is required'),
   role: z.nativeEnum(Role),
 })
 
 const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
 
-export async function GET() {
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+export async function GET(request: NextRequest) {
   try {
-    const staff = await requireRole([Role.ADMIN, Role.MANAGER])
+    await requireRole([Role.ADMIN, Role.MANAGER])
     const staffList = await prisma.staffProfile.findMany({
       include: {
         grants: { where: { active: true }, select: { role: true } },
@@ -25,7 +30,7 @@ export async function GET() {
       orderBy: { name: 'asc' },
     })
 
-    return NextResponse.json({
+    return createdResponse({
       staff: staffList.map((s) => ({
         id: s.id,
         name: s.name,
@@ -39,24 +44,31 @@ export async function GET() {
       })),
     })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to load staff' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view staff', 403, undefined, getPath(request))
+    }
+    console.error('GET /api/staff error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load staff', 500, undefined, getPath(request))
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const admin = await requireRole([Role.ADMIN])
+    await requireRole([Role.ADMIN])
     const body = await request.json()
-    const { email, name, role } = inviteSchema.parse(body)
+    const parsed = inviteSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid invitation data', 400, parsed.error.issues, getPath(request))
+    }
+
+    const { email, name, role } = parsed.data
 
     const existing = await prisma.staffProfile.findUnique({ where: { email } })
     if (existing) {
-      return NextResponse.json({ error: 'Staff with this email already exists' }, { status: 400 })
+      return errorResponse(ErrorCodes.CONFLICT, 'A staff member with this email already exists', 400, { field: 'email' }, getPath(request))
     }
 
-    // Create staff profile with INVITED status
     const newStaff = await prisma.staffProfile.create({
       data: {
         clerkUserId: `pending_${Date.now()}`,
@@ -67,27 +79,25 @@ export async function POST(request: Request) {
       },
     })
 
-    // Send Clerk invitation email
     try {
       await clerkClient.invitations.createInvitation({
         emailAddress: email,
-        publicMetadata: {
-          staffId: newStaff.id,
-          role: role,
-        },
+        publicMetadata: { staffId: newStaff.id, role },
         redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/sign-up`,
       })
     } catch (clerkError) {
       console.error('Clerk invitation failed:', clerkError)
-      // Don't fail the request - staff record created, admin can resend
     }
 
-    return NextResponse.json({ staff: newStaff }, { status: 201 })
+    return createdResponse({ staff: newStaff })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    if (error instanceof z.ZodError)
-      return NextResponse.json({ error: error.issues }, { status: 400 })
-    return NextResponse.json({ error: 'Failed to invite staff' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'Only administrators can invite staff', 403, undefined, getPath(request))
+    }
+    if (error instanceof z.ZodError) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid invitation data', 400, error.issues, getPath(request))
+    }
+    console.error('POST /api/staff error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to invite staff', 500, undefined, getPath(request))
   }
 }

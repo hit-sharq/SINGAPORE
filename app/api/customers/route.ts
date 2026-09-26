@@ -1,17 +1,22 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
 import { z } from 'zod'
+import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
 const customerSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1, 'Name is required'),
   phone: z.string().optional(),
-  email: z.string().email().optional().or(z.literal('')),
+  email: z.string().email('Invalid email').optional().or(z.literal('')),
   notes: z.string().optional(),
 })
 
-export async function GET() {
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+export async function GET(request: NextRequest) {
   try {
     await requireRole([Role.ADMIN, Role.MANAGER])
     const customers = await prisma.customer.findMany({
@@ -22,7 +27,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json({
+    return successResponse({
       customers: customers.map((c) => ({
         id: c.id,
         name: c.name,
@@ -35,37 +40,52 @@ export async function GET() {
       })),
     })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to load customers' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view customers', 403, undefined, getPath(request))
+    }
+    console.error('GET /api/customers error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load customers', 500, undefined, getPath(request))
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     await requireRole([Role.ADMIN, Role.MANAGER])
     const body = await request.json()
-    const { name, phone, email, notes } = customerSchema.parse(body)
+    const parsed = customerSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid customer data', 400, parsed.error.issues, getPath(request))
+    }
+
+    const { name, phone, email, notes } = parsed.data
 
     if (phone) {
       const existing = await prisma.customer.findUnique({ where: { phone } })
-      if (existing) return NextResponse.json({ error: 'Phone already exists' }, { status: 400 })
+      if (existing) {
+        return errorResponse(ErrorCodes.CONFLICT, 'A customer with this phone number already exists', 400, { field: 'phone' }, getPath(request))
+      }
     }
     if (email) {
       const existing = await prisma.customer.findUnique({ where: { email } })
-      if (existing) return NextResponse.json({ error: 'Email already exists' }, { status: 400 })
+      if (existing) {
+        return errorResponse(ErrorCodes.CONFLICT, 'A customer with this email already exists', 400, { field: 'email' }, getPath(request))
+      }
     }
 
     const customer = await prisma.customer.create({
       data: { name, phone: phone || null, email: email || null, notes: notes || null },
     })
 
-    return NextResponse.json({ customer }, { status: 201 })
+    return createdResponse({ customer })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    if (error instanceof z.ZodError)
-      return NextResponse.json({ error: error.issues }, { status: 400 })
-    return NextResponse.json({ error: 'Failed to create customer' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to create customers', 403, undefined, getPath(request))
+    }
+    if (error instanceof z.ZodError) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid customer data', 400, error.issues, getPath(request))
+    }
+    console.error('POST /api/customers error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to create customer', 500, undefined, getPath(request))
   }
 }

@@ -1,31 +1,56 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role, TableStatus } from '@prisma/client'
+import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
 const statusSchema = z.object({
   status: z.nativeEnum(TableStatus),
 })
 
 const updateSchema = z.object({
-  name: z.string().min(1).optional(),
-  capacity: z.number().int().positive().optional(),
+  name: z.string().min(1, 'Name is required').optional(),
+  capacity: z.number().int().positive('Capacity must be a positive integer').optional(),
   status: z.nativeEnum(TableStatus).optional(),
 })
 
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+function formatTable(table: any) {
+  return {
+    ...table,
+    capacity: table.capacity,
+    orders: table.orders?.map((order: any) => ({
+      ...order,
+      total: order.total.toString(),
+      payments: order.payments,
+    })) ?? [],
+  }
+}
+
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const staff = await requireRole([Role.ADMIN, Role.MANAGER, Role.CASHIER, Role.WAITER])
     const { id } = await params
     const body = await request.json()
-    const data = updateSchema.parse(body)
+    const parsed = updateSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid table data', 400, parsed.error.issues, getPath(request))
+    }
+
+    const data = parsed.data
 
     const table = await prisma.venueTable.findUnique({ where: { id } })
-    if (!table) return NextResponse.json({ error: 'Table not found' }, { status: 404 })
+    if (!table) {
+      return errorResponse(ErrorCodes.NOT_FOUND, 'Table not found', 404, undefined, getPath(request))
+    }
 
     if (data.status && data.status !== table.status) {
       const openOrder = await prisma.order.findFirst({
@@ -33,11 +58,11 @@ export async function PATCH(
       })
 
       if (data.status === 'OCCUPIED' && !openOrder) {
-        return NextResponse.json({ error: 'Cannot occupy table without an open order' }, { status: 400 })
+        return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Cannot occupy table without an open order', 400, { field: 'status' }, getPath(request))
       }
 
       if (data.status === 'AVAILABLE' && openOrder) {
-        return NextResponse.json({ error: 'Table has an open order, close it first' }, { status: 400 })
+        return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Table has an open order, close it first', 400, { field: 'status' }, getPath(request))
       }
     }
 
@@ -66,18 +91,21 @@ export async function PATCH(
       })
     }
 
-    return NextResponse.json(updated)
+    return successResponse({ table: formatTable(updated) })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    if (error instanceof z.ZodError)
-      return NextResponse.json({ error: error.issues }, { status: 400 })
-    return NextResponse.json({ error: 'Unable to update table' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to update tables', 403, undefined, getPath(request))
+    }
+    if (error instanceof z.ZodError) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid table data', 400, error.issues, getPath(request))
+    }
+    console.error('PATCH /api/tables/[id] error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to update table', 500, undefined, getPath(request))
   }
 }
 
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -85,13 +113,15 @@ export async function DELETE(
     const { id } = await params
 
     const table = await prisma.venueTable.findUnique({ where: { id } })
-    if (!table) return NextResponse.json({ error: 'Table not found' }, { status: 404 })
+    if (!table) {
+      return errorResponse(ErrorCodes.NOT_FOUND, 'Table not found', 404, undefined, getPath(request))
+    }
 
     const openOrder = await prisma.order.findFirst({
       where: { tableId: id, status: 'OPEN' },
     })
     if (openOrder) {
-      return NextResponse.json({ error: 'Cannot delete table with open order' }, { status: 400 })
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Cannot delete table with open order', 400, { field: 'table' }, getPath(request))
     }
 
     await prisma.venueTable.delete({ where: { id } })
@@ -106,10 +136,12 @@ export async function DELETE(
       },
     })
 
-    return NextResponse.json({ success: true })
+    return successResponse({ success: true })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to delete table' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to delete tables', 403, undefined, getPath(request))
+    }
+    console.error('DELETE /api/tables/[id] error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to delete table', 500, undefined, getPath(request))
   }
 }

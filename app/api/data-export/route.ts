@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
 import { z } from 'zod'
+import { errorResponse, successResponse, createdResponse, ErrorCodes } from '@/lib/api/response'
 
 const exportSchema = z.object({
   entity: z.enum(['orders', 'products', 'customers', 'staff', 'shifts', 'payments', 'stockMovements', 'auditLogs']),
@@ -12,7 +13,28 @@ const exportSchema = z.object({
   filters: z.record(z.unknown()).optional(),
 })
 
-export async function GET(request: Request) {
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+function flattenObject(obj: Record<string, unknown>, prefix = ''): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(obj)) {
+    const newKey = prefix ? `${prefix}.${key}` : key
+    if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+      Object.assign(result, flattenObject(value as Record<string, unknown>, newKey))
+    } else {
+      result[newKey] = value
+    }
+  }
+  return result
+}
+
+function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce((o: unknown, k) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[k] : undefined), obj)
+}
+
+export async function GET(request: NextRequest) {
   try {
     await requireRole([Role.ADMIN, Role.MANAGER])
     const { searchParams } = new URL(request.url)
@@ -28,7 +50,7 @@ export async function GET(request: Request) {
       prisma.dataArchive.count(),
     ])
 
-    return NextResponse.json({
+    return successResponse({
       exports: exports.map((e) => ({
         id: e.id,
         entity: e.entity,
@@ -39,17 +61,25 @@ export async function GET(request: Request) {
       pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to load exports' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view exports', 403, undefined, getPath(request))
+    }
+    console.error('GET /api/data-export error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load exports', 500, undefined, getPath(request))
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const staff = await requireRole([Role.ADMIN, Role.MANAGER])
     const body = await request.json()
-    const { entity, format, dateFrom, dateTo, filters } = exportSchema.parse(body)
+    const parsed = exportSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid export data', 400, parsed.error.issues, getPath(request))
+    }
+
+    const { entity, format, dateFrom, dateTo, filters } = parsed.data
 
     let data: Record<string, unknown>[] = []
     let where: Record<string, unknown> = {}
@@ -142,29 +172,15 @@ export async function POST(request: Request) {
       })
     }
 
-    return NextResponse.json({ archiveId: archive.id, count: data.length, data })
+    return createdResponse({ archiveId: archive.id, count: data.length, data })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    if (error instanceof z.ZodError)
-      return NextResponse.json({ error: error.issues }, { status: 400 })
-    return NextResponse.json({ error: 'Failed to export data' }, { status: 500 })
-  }
-}
-
-function flattenObject(obj: Record<string, unknown>, prefix = ''): Record<string, unknown> {
-  const result: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(obj)) {
-    const newKey = prefix ? `${prefix}.${key}` : key
-    if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-      Object.assign(result, flattenObject(value as Record<string, unknown>, newKey))
-    } else {
-      result[newKey] = value
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to export data', 403, undefined, getPath(request))
     }
+    if (error instanceof z.ZodError) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid export data', 400, error.issues, getPath(request))
+    }
+    console.error('POST /api/data-export error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to export data', 500, undefined, getPath(request))
   }
-  return result
-}
-
-function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-  return path.split('.').reduce((o: unknown, k) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[k] : undefined), obj)
 }

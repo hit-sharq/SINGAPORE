@@ -1,9 +1,14 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role, OrderStatus, PaymentStatus } from '@prisma/client'
+import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
-export async function GET() {
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+export async function GET(request: NextRequest) {
   try {
     const staff = await requireRole(Object.values(Role))
     const start = new Date()
@@ -92,7 +97,7 @@ export async function GET() {
       _sum: { total: true },
     })
 
-    return NextResponse.json({
+    return successResponse({
       staff: {
         name: staff.name,
         role: staff.role,
@@ -151,8 +156,10 @@ export async function GET() {
         : null,
     })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to load dashboard' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view dashboard', 403, undefined, getPath(request))
+    }
+    console.error('GET /api/dashboard error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load dashboard', 500, undefined, getPath(request))
   }
 }

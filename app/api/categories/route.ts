@@ -1,37 +1,51 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
+import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
 const categorySchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1, 'Name is required'),
 })
 
-export async function GET() {
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+export async function GET(request: NextRequest) {
   try {
-    const staff = await requireRole(Object.values(Role))
+    await requireRole(Object.values(Role))
     const categories = await prisma.category.findMany({
       orderBy: { name: 'asc' },
       include: { _count: { select: { products: true } } },
     })
-    return NextResponse.json(categories)
+
+    return successResponse({ categories })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to load categories' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view categories', 403, undefined, getPath(request))
+    }
+    console.error('GET /api/categories error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load categories', 500, undefined, getPath(request))
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const staff = await requireRole([Role.ADMIN, Role.MANAGER, Role.INVENTORY_MANAGER])
     const body = await request.json()
-    const { name } = categorySchema.parse(body)
+    const parsed = categorySchema.safeParse(body)
+
+    if (!parsed.success) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid category data', 400, parsed.error.issues, getPath(request))
+    }
+
+    const { name } = parsed.data
 
     const existing = await prisma.category.findUnique({ where: { name } })
     if (existing) {
-      return NextResponse.json({ error: 'Category already exists' }, { status: 400 })
+      return errorResponse(ErrorCodes.CONFLICT, 'A category with this name already exists', 400, { field: 'name' }, getPath(request))
     }
 
     const category = await prisma.category.create({ data: { name } })
@@ -46,12 +60,15 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json(category, { status: 201 })
+    return createdResponse({ category })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    if (error instanceof z.ZodError)
-      return NextResponse.json({ error: error.issues }, { status: 400 })
-    return NextResponse.json({ error: 'Unable to create category' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to create categories', 403, undefined, getPath(request))
+    }
+    if (error instanceof z.ZodError) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid category data', 400, error.issues, getPath(request))
+    }
+    console.error('POST /api/categories error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to create category', 500, undefined, getPath(request))
   }
 }

@@ -1,9 +1,14 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
+import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
-export async function GET(request: Request) {
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+export async function GET(request: NextRequest) {
   try {
     await requireRole([Role.ADMIN, Role.MANAGER, Role.INVENTORY_MANAGER])
     const { searchParams } = new URL(request.url)
@@ -45,7 +50,7 @@ export async function GET(request: Request) {
     const inQty = stockMovements.filter((m) => Number(m.quantity) > 0).reduce((sum, m) => sum + Number(m.quantity), 0)
     const outQty = stockMovements.filter((m) => Number(m.quantity) < 0).reduce((sum, m) => sum + Math.abs(Number(m.quantity)), 0)
 
-    return NextResponse.json({
+    return successResponse({
       periodDays: days,
       summary: {
         totalProducts: products.length,
@@ -93,8 +98,10 @@ export async function GET(request: Request) {
       })),
     })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to load inventory report' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view inventory report', 403, undefined, getPath(request))
+    }
+    console.error('GET /api/reports/inventory error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load inventory report', 500, undefined, getPath(request))
   }
 }

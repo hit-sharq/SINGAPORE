@@ -1,15 +1,52 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role, OrderStatus } from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
 const statusSchema = z.object({
   status: z.nativeEnum(OrderStatus),
 })
 
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+function formatOrder(order: any) {
+  const paidAmount = order.payments
+    .filter((p: any) => p.status === 'COMPLETED')
+    .reduce((sum: any, p: any) => sum.plus(p.amount), new Prisma.Decimal(0))
+  const outstanding = order.total.minus(paidAmount)
+
+  return {
+    ...order,
+    total: order.total.toString(),
+    items: order.items.map((item: any) => ({
+      ...item,
+      unitPrice: item.unitPrice.toString(),
+      subtotal: item.subtotal.toString(),
+      quantity: item.quantity.toString(),
+      product: {
+        ...item.product,
+        price: item.product.price.toString(),
+        costPrice: item.product.costPrice.toString(),
+        stock: item.product.stock.toString(),
+        reorderAt: item.product.reorderAt.toString(),
+      },
+    })),
+    payments: order.payments.map((p: any) => ({
+      ...p,
+      amount: p.amount.toString(),
+    })),
+    outstanding: outstanding.toString(),
+    paidAmount: paidAmount.toString(),
+  }
+}
+
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -28,71 +65,54 @@ export async function GET(
     })
 
     if (!order) {
-      return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+      return errorResponse(ErrorCodes.NOT_FOUND, 'Order not found', 404, undefined, getPath(request))
     }
 
-    const paidAmount = order.payments
-      .filter((p) => p.status === 'COMPLETED')
-      .reduce((sum, p) => sum.plus(p.amount), new (require('@prisma/client').Prisma.Decimal)(0))
-    const outstanding = order.total.minus(paidAmount)
-
-    return NextResponse.json({
-      ...order,
-      total: order.total.toString(),
-      items: order.items.map((item) => ({
-        ...item,
-        unitPrice: item.unitPrice.toString(),
-        subtotal: item.subtotal.toString(),
-        quantity: item.quantity.toString(),
-        product: {
-          ...item.product,
-          price: item.product.price.toString(),
-          costPrice: item.product.costPrice.toString(),
-          stock: item.product.stock.toString(),
-          reorderAt: item.product.reorderAt.toString(),
-        },
-      })),
-      payments: order.payments.map((p) => ({
-        ...p,
-        amount: p.amount.toString(),
-      })),
-      outstanding: outstanding.toString(),
-      paidAmount: paidAmount.toString(),
-    })
+    return successResponse({ order: formatOrder(order) })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to load order' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view this order', 403, undefined, getPath(request))
+    }
+    console.error('GET /api/orders/[id] error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load order', 500, undefined, getPath(request))
   }
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const staff = await requireRole([Role.ADMIN, Role.MANAGER, Role.CASHIER])
     const { id } = await params
     const body = await request.json()
-    const { status } = statusSchema.parse(body)
+    const parsed = statusSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid status data', 400, parsed.error.issues, getPath(request))
+    }
+
+    const { status } = parsed.data
 
     const order = await prisma.order.findUnique({ where: { id } })
-    if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    if (!order) {
+      return errorResponse(ErrorCodes.NOT_FOUND, 'Order not found', 404, undefined, getPath(request))
+    }
 
     if (order.status === 'VOID' || order.status === 'REFUNDED') {
-      return NextResponse.json({ error: 'Cannot modify voided or refunded order' }, { status: 400 })
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Cannot modify voided or refunded order', 400, { field: 'status' }, getPath(request))
     }
 
     if (status === 'PAID' && order.status !== 'OPEN') {
-      return NextResponse.json({ error: 'Only open orders can be marked paid' }, { status: 400 })
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Only open orders can be marked paid', 400, { field: 'status' }, getPath(request))
     }
 
     if (status === 'VOID' && order.status !== 'OPEN') {
-      return NextResponse.json({ error: 'Only open orders can be voided' }, { status: 400 })
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Only open orders can be voided', 400, { field: 'status' }, getPath(request))
     }
 
     if (status === 'REFUNDED' && order.status !== 'PAID') {
-      return NextResponse.json({ error: 'Only paid orders can be refunded' }, { status: 400 })
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Only paid orders can be refunded', 400, { field: 'status' }, getPath(request))
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -165,32 +185,15 @@ export async function PATCH(
       return updatedOrder
     })
 
-    return NextResponse.json({
-      ...updated,
-      total: updated.total.toString(),
-      items: updated.items.map((item) => ({
-        ...item,
-        unitPrice: item.unitPrice.toString(),
-        subtotal: item.subtotal.toString(),
-        quantity: item.quantity.toString(),
-        product: {
-          ...item.product,
-          price: item.product.price.toString(),
-          costPrice: item.product.costPrice.toString(),
-          stock: item.product.stock.toString(),
-          reorderAt: item.product.reorderAt.toString(),
-        },
-      })),
-      payments: updated.payments.map((p) => ({
-        ...p,
-        amount: p.amount.toString(),
-      })),
-    })
+    return successResponse({ order: formatOrder(updated) })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    if (error instanceof z.ZodError)
-      return NextResponse.json({ error: error.issues }, { status: 400 })
-    return NextResponse.json({ error: 'Unable to update order' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to update orders', 403, undefined, getPath(request))
+    }
+    if (error instanceof z.ZodError) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid status data', 400, error.issues, getPath(request))
+    }
+    console.error('PATCH /api/orders/[id] error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to update order', 500, undefined, getPath(request))
   }
 }

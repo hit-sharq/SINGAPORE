@@ -1,9 +1,14 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
+import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
-export async function GET(request: Request) {
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+export async function GET(request: NextRequest) {
   try {
     await requireRole([Role.ADMIN, Role.MANAGER])
     const { searchParams } = new URL(request.url)
@@ -52,7 +57,7 @@ export async function GET(request: Request) {
       take: 20,
     })
 
-    return NextResponse.json({
+    return successResponse({
       logs: logs.map((l) => ({
         id: l.id,
         action: l.action,
@@ -66,8 +71,10 @@ export async function GET(request: Request) {
       filters: { actions: actions.map((a) => a.action), entities: entities.map((e) => e.entity) },
     })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to load audit logs' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view audit logs', 403, undefined, getPath(request))
+    }
+    console.error('GET /api/audit-logs error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load audit logs', 500, undefined, getPath(request))
   }
 }

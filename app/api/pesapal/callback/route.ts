@@ -1,12 +1,13 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { PaymentStatus, OrderStatus } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 
 /**
  * PesaPal callback endpoint — receives the payment result and updates the Payment record.
  * This is a public route (no auth) — whitelisted in proxy.ts.
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const url = new URL(request.url)
   const orderTrackingId = url.searchParams.get('OrderTrackingId')
   const merchantReference = url.searchParams.get('OrderMerchantReference')
@@ -66,7 +67,7 @@ export async function GET(request: Request) {
             if (order && order.status === 'OPEN') {
               const paidAmount = order.payments
                 .filter((p) => p.status === 'COMPLETED' || p.id === payment.id)
-                .reduce((sum, p) => sum.plus(p.amount), new (require('@prisma/client').Prisma.Decimal)(0))
+                .reduce((sum, p) => sum.plus(p.amount), new Prisma.Decimal(0))
               if (paidAmount.greaterThanOrEqualTo(order.total)) {
                 await tx.order.update({
                   where: { id: order.id },

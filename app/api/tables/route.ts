@@ -1,12 +1,13 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role, TableStatus } from '@prisma/client'
+import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
 const tableSchema = z.object({
-  name: z.string().min(1),
-  capacity: z.number().int().positive().default(4),
+  name: z.string().min(1, 'Name is required'),
+  capacity: z.number().int().positive('Capacity must be a positive integer').default(4),
   status: z.nativeEnum(TableStatus).default('AVAILABLE'),
 })
 
@@ -14,9 +15,25 @@ const statusSchema = z.object({
   status: z.nativeEnum(TableStatus),
 })
 
-export async function GET() {
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+function formatTable(table: any) {
+  return {
+    ...table,
+    capacity: table.capacity,
+    orders: table.orders?.map((order: any) => ({
+      ...order,
+      total: order.total.toString(),
+      payments: order.payments,
+    })) ?? [],
+  }
+}
+
+export async function GET(request: NextRequest) {
   try {
-    const staff = await requireRole(Object.values(Role))
+    await requireRole(Object.values(Role))
     const tables = await prisma.venueTable.findMany({
       orderBy: { name: 'asc' },
       include: {
@@ -29,29 +46,29 @@ export async function GET() {
       },
     })
 
-    return NextResponse.json(
-      tables.map((table) => ({
-        ...table,
-        capacity: table.capacity,
-        orders: table.orders.map((order) => ({
-          ...order,
-          total: order.total.toString(),
-          payments: order.payments,
-        })),
-      }))
-    )
+    return successResponse({
+      tables: tables.map(formatTable),
+    })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to load tables' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view tables', 403, undefined, getPath(request))
+    }
+    console.error('GET /api/tables error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load tables', 500, undefined, getPath(request))
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const staff = await requireRole([Role.ADMIN, Role.MANAGER])
     const body = await request.json()
-    const { name, capacity, status } = tableSchema.parse(body)
+    const parsed = tableSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid table data', 400, parsed.error.issues, getPath(request))
+    }
+
+    const { name, capacity, status } = parsed.data
 
     const table = await prisma.venueTable.create({
       data: { name, capacity, status },
@@ -67,12 +84,15 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json(table, { status: 201 })
+    return createdResponse({ table })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    if (error instanceof z.ZodError)
-      return NextResponse.json({ error: error.issues }, { status: 400 })
-    return NextResponse.json({ error: 'Unable to create table' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to create tables', 403, undefined, getPath(request))
+    }
+    if (error instanceof z.ZodError) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid table data', 400, error.issues, getPath(request))
+    }
+    console.error('POST /api/tables error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to create table', 500, undefined, getPath(request))
   }
 }

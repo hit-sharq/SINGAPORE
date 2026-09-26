@@ -1,18 +1,23 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
 import { z } from 'zod'
+import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
 const updateSchema = z.object({
-  name: z.string().min(1).optional(),
+  name: z.string().min(1, 'Name is required').optional(),
   phone: z.string().optional().nullable(),
-  email: z.string().email().optional().nullable(),
+  email: z.string().email('Invalid email').optional().nullable(),
   notes: z.string().optional().nullable(),
 })
 
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -30,9 +35,11 @@ export async function GET(
       },
     })
 
-    if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+    if (!customer) {
+      return errorResponse(ErrorCodes.NOT_FOUND, 'Customer not found', 404, undefined, getPath(request))
+    }
 
-    return NextResponse.json({
+    return successResponse({
       customer: {
         id: customer.id,
         name: customer.name,
@@ -62,23 +69,31 @@ export async function GET(
       },
     })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to load customer' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view this customer', 403, undefined, getPath(request))
+    }
+    console.error('GET /api/customers/[id] error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load customer', 500, undefined, getPath(request))
   }
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await requireRole([Role.ADMIN, Role.MANAGER])
     const { id } = await params
     const body = await request.json()
-    const { name, phone, email, notes } = updateSchema.parse(body)
+    const parsed = updateSchema.safeParse(body)
 
-    const updateData: any = {}
+    if (!parsed.success) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid customer data', 400, parsed.error.issues, getPath(request))
+    }
+
+    const { name, phone, email, notes } = parsed.data
+
+    const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name
     if (phone !== undefined) updateData.phone = phone
     if (email !== undefined) updateData.email = email
@@ -86,26 +101,33 @@ export async function PATCH(
 
     if (phone) {
       const existing = await prisma.customer.findFirst({ where: { phone, NOT: { id } } })
-      if (existing) return NextResponse.json({ error: 'Phone already exists' }, { status: 400 })
+      if (existing) {
+        return errorResponse(ErrorCodes.CONFLICT, 'A customer with this phone already exists', 400, { field: 'phone' }, getPath(request))
+      }
     }
     if (email) {
       const existing = await prisma.customer.findFirst({ where: { email, NOT: { id } } })
-      if (existing) return NextResponse.json({ error: 'Email already exists' }, { status: 400 })
+      if (existing) {
+        return errorResponse(ErrorCodes.CONFLICT, 'A customer with this email already exists', 400, { field: 'email' }, getPath(request))
+      }
     }
 
     const customer = await prisma.customer.update({ where: { id }, data: updateData })
-    return NextResponse.json({ customer })
+    return successResponse({ customer })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    if (error instanceof z.ZodError)
-      return NextResponse.json({ error: error.issues }, { status: 400 })
-    return NextResponse.json({ error: 'Failed to update customer' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to update customers', 403, undefined, getPath(request))
+    }
+    if (error instanceof z.ZodError) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid customer data', 400, error.issues, getPath(request))
+    }
+    console.error('PATCH /api/customers/[id] error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to update customer', 500, undefined, getPath(request))
   }
 }
 
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -113,10 +135,12 @@ export async function DELETE(
     const { id } = await params
 
     await prisma.customer.delete({ where: { id } })
-    return NextResponse.json({ success: true })
+    return successResponse({ success: true })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Failed to delete customer' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'Only administrators can delete customers', 403, undefined, getPath(request))
+    }
+    console.error('DELETE /api/customers/[id] error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to delete customer', 500, undefined, getPath(request))
   }
 }

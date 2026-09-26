@@ -1,10 +1,15 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
+import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
+
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -12,7 +17,9 @@ export async function POST(
     const { id } = await params
 
     const printer = await prisma.printerConfig.findUnique({ where: { id } })
-    if (!printer) return NextResponse.json({ error: 'Printer not found' }, { status: 404 })
+    if (!printer) {
+      return errorResponse(ErrorCodes.NOT_FOUND, 'Printer not found', 404, undefined, getPath(request))
+    }
 
     try {
       const res = await fetch(printer.endpoint, {
@@ -20,22 +27,24 @@ export async function POST(
         signal: AbortSignal.timeout(5000),
       })
       const ok = res.ok
-      return NextResponse.json({
+      return successResponse({
         printer: { id: printer.id, name: printer.name, endpoint: printer.endpoint },
         online: ok,
         status: res.status,
         statusText: res.statusText,
       })
-    } catch (e) {
-      return NextResponse.json({
+    } catch {
+      return successResponse({
         printer: { id: printer.id, name: printer.name, endpoint: printer.endpoint },
         online: false,
         error: 'Connection failed',
       })
     }
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Failed to test printer' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to test printers', 403, undefined, getPath(request))
+    }
+    console.error('POST /api/integrations/printers/[id]/test error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to test printer', 500, undefined, getPath(request))
   }
 }

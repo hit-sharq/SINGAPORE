@@ -1,33 +1,57 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
+import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
 const adjustSchema = z.object({
-  productId: z.string(),
-  quantity: z.string().regex(/^-?\d+(\.\d{1,3})?$/),
-  reason: z.string().min(1),
+  productId: z.string().cuid('Invalid product ID'),
+  quantity: z.string().regex(/^-?\d+(\.\d{1,3})?$/, 'Invalid quantity format'),
+  reason: z.string().min(1, 'Reason is required'),
   reference: z.string().optional(),
 })
 
-export async function POST(request: Request) {
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+function formatProduct(product: any) {
+  return {
+    ...product,
+    price: product.price.toString(),
+    costPrice: product.costPrice.toString(),
+    stock: product.stock.toString(),
+    reorderAt: product.reorderAt.toString(),
+    category: { name: product.category?.name },
+  }
+}
+
+export async function POST(request: NextRequest) {
   try {
     const staff = await requireRole([Role.ADMIN, Role.MANAGER, Role.INVENTORY_MANAGER])
     const body = await request.json()
-    const { productId, quantity, reason, reference } = adjustSchema.parse(body)
+    const parsed = adjustSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid adjustment data', 400, parsed.error.issues, getPath(request))
+    }
+
+    const { productId, quantity, reason, reference } = parsed.data
 
     const qty = Number(quantity)
     if (qty === 0) {
-      return NextResponse.json({ error: 'Quantity cannot be zero' }, { status: 400 })
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Quantity cannot be zero', 400, { field: 'quantity' }, getPath(request))
     }
 
     const product = await prisma.product.findUnique({ where: { id: productId } })
-    if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+    if (!product) {
+      return errorResponse(ErrorCodes.NOT_FOUND, 'Product not found', 404, undefined, getPath(request))
+    }
 
     const newStock = Number(product.stock) + qty
     if (newStock < 0) {
-      return NextResponse.json({ error: 'Insufficient stock for this adjustment' }, { status: 400 })
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Insufficient stock for this adjustment', 400, { field: 'quantity' }, getPath(request))
     }
 
     const [updated, movement] = await prisma.$transaction([
@@ -56,22 +80,18 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json({
-      product: {
-        ...updated,
-        price: updated.price.toString(),
-        costPrice: updated.costPrice.toString(),
-        stock: updated.stock.toString(),
-        reorderAt: updated.reorderAt.toString(),
-        category: { name: updated.category.name },
-      },
+    return successResponse({
+      product: formatProduct(updated),
       movement,
     })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    if (error instanceof z.ZodError)
-      return NextResponse.json({ error: error.issues }, { status: 400 })
-    return NextResponse.json({ error: 'Unable to adjust stock' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to adjust stock', 403, undefined, getPath(request))
+    }
+    if (error instanceof z.ZodError) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid adjustment data', 400, error.issues, getPath(request))
+    }
+    console.error('POST /api/inventory/adjust error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to adjust stock', 500, undefined, getPath(request))
   }
 }

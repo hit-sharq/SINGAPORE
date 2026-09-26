@@ -1,20 +1,40 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
+import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 
 const openShiftSchema = z.object({
-  openingCash: z.string().regex(/^\d+(\.\d{1,2})?$/).default('0'),
+  openingCash: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid amount format').default('0'),
 })
 
 const cashTransactionSchema = z.object({
   type: z.enum(['SALE', 'REFUND', 'PAYOUT', 'DROP', 'TIP_IN', 'TIP_OUT', 'OTHER']),
-  amount: z.string().regex(/^\d+(\.\d{1,2})?$/),
-  reason: z.string().min(1),
+  amount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid amount format'),
+  reason: z.string().min(1, 'Reason is required'),
 })
 
-export async function GET() {
+function getPath(request: NextRequest): string {
+  return request.nextUrl.pathname
+}
+
+function formatShift(shift: any) {
+  return {
+    ...shift,
+    openingCash: shift.openingCash.toString(),
+    closingCash: shift.closingCash?.toString() ?? null,
+    cashDrawer: shift.cashDrawer
+      ? { ...shift.cashDrawer, balance: shift.cashDrawer.balance.toString() }
+      : null,
+    cashTransactions: shift.cashTransactions?.map((t: any) => ({
+      ...t,
+      amount: t.amount.toString(),
+    })) ?? [],
+  }
+}
+
+export async function GET(request: NextRequest) {
   try {
     const staff = await requireRole(Object.values(Role))
     const shift = await prisma.shift.findFirst({
@@ -26,39 +46,36 @@ export async function GET() {
     })
 
     if (!shift) {
-      return NextResponse.json({ shift: null })
+      return successResponse({ shift: null })
     }
 
-    return NextResponse.json({
-      ...shift,
-      openingCash: shift.openingCash.toString(),
-      closingCash: shift.closingCash?.toString() ?? null,
-      cashDrawer: shift.cashDrawer
-        ? { ...shift.cashDrawer, balance: shift.cashDrawer.balance.toString() }
-        : null,
-      cashTransactions: shift.cashTransactions.map((t) => ({
-        ...t,
-        amount: t.amount.toString(),
-      })),
-    })
+    return successResponse({ shift: formatShift(shift) })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    return NextResponse.json({ error: 'Unable to load shift' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view shifts', 403, undefined, getPath(request))
+    }
+    console.error('GET /api/shifts error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load shift', 500, undefined, getPath(request))
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const staff = await requireRole([Role.ADMIN, Role.MANAGER, Role.CASHIER, Role.BARTENDER, Role.WAITER])
     const body = await request.json()
-    const { openingCash } = openShiftSchema.parse(body)
+    const parsed = openShiftSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid shift data', 400, parsed.error.issues, getPath(request))
+    }
+
+    const { openingCash } = parsed.data
 
     const existingShift = await prisma.shift.findFirst({
       where: { userId: staff.id, status: 'OPEN' },
     })
     if (existingShift) {
-      return NextResponse.json({ error: 'You already have an open shift' }, { status: 400 })
+      return errorResponse(ErrorCodes.CONFLICT, 'You already have an open shift', 400, { field: 'shift' }, getPath(request))
     }
 
     const shift = await prisma.$transaction(async (tx) => {
@@ -91,12 +108,15 @@ export async function POST(request: Request) {
       return created
     })
 
-    return NextResponse.json({ ...shift, openingCash: shift.openingCash.toString() }, { status: 201 })
+    return createdResponse({ shift: formatShift(shift) })
   } catch (error) {
-    if (error instanceof Error && error.message === 'FORBIDDEN')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    if (error instanceof z.ZodError)
-      return NextResponse.json({ error: error.issues }, { status: 400 })
-    return NextResponse.json({ error: 'Unable to open shift' }, { status: 500 })
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to open shifts', 403, undefined, getPath(request))
+    }
+    if (error instanceof z.ZodError) {
+      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid shift data', 400, error.issues, getPath(request))
+    }
+    console.error('POST /api/shifts error:', error)
+    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to open shift', 500, undefined, getPath(request))
   }
 }
