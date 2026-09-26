@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
 
     const flag = await prisma.featureFlag.create({ data: { key, enabled: enabled ?? false } })
     await prisma.auditLog.create({
-      data: { userId: admin.id, action: 'CREATE_FEATURE_FLAG', entity: 'FeatureFlag', entityId: flag.id, metadata: { key, enabled } },
+      data: { userId: admin.id, action: 'CREATE_FEATURE_FLAG', entity: 'FeatureFlag', entityId: flag.key, metadata: { key, enabled } },
     })
 
     return createdResponse({ flag })

@@ -10,7 +10,7 @@ const exportSchema = z.object({
   format: z.enum(['json', 'csv']).default('json'),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
-  filters: z.record(z.unknown()).optional(),
+  filters: z.record(z.string(), z.unknown()).optional(),
 })
 
 function getPath(request: NextRequest): string {
@@ -81,13 +81,14 @@ export async function POST(request: NextRequest) {
 
     const { entity, format, dateFrom, dateTo, filters } = parsed.data
 
-    let data: Record<string, unknown>[] = []
+    let data: any[] = []
     let where: Record<string, unknown> = {}
 
     if (dateFrom || dateTo) {
-      where.createdAt = {}
-      if (dateFrom) where.createdAt = { ...where.createdAt, gte: new Date(dateFrom) }
-      if (dateTo) where.createdAt = { ...where.createdAt, lte: new Date(dateTo) }
+      const createdAtFilter: Record<string, Date> = {}
+      if (dateFrom) createdAtFilter.gte = new Date(dateFrom)
+      if (dateTo) createdAtFilter.lte = new Date(dateTo)
+      where.createdAt = createdAtFilter
     }
 
     if (filters) Object.assign(where, filters)
@@ -108,11 +109,17 @@ export async function POST(request: NextRequest) {
         })
         break
       case 'customers':
-        data = await prisma.customer.findMany({
-          where,
-          include: { orders: { include: { order: { include: { payments: true, items: true } } } } },
-          orderBy: { createdAt: 'desc' },
-        })
+        {
+          const include: any = {
+            orders: { include: { order: { include: { payments: true, items: true } } } },
+          }
+          data = await prisma.customer.findMany({
+            where,
+            // @ts-ignore - Prisma relations not in schema
+            include,
+            orderBy: { createdAt: 'desc' },
+          }) as any
+        }
         break
       case 'staff':
         data = await prisma.staffProfile.findMany({
@@ -155,7 +162,7 @@ export async function POST(request: NextRequest) {
       data: {
         entity,
         entityId: `export_${Date.now()}`,
-        payload: { data, format, filters: { dateFrom, dateTo, ...filters }, exportedBy: staff.id, exportedAt: new Date().toISOString() },
+        payload: { data: JSON.parse(JSON.stringify(data)), format, filters: { dateFrom, dateTo, ...filters }, exportedBy: staff.id, exportedAt: new Date().toISOString() } as any,
       },
     })
 

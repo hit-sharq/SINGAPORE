@@ -52,23 +52,6 @@ export default function SignInPage() {
                 dividerLine: 'max-w-full',
               },
             }}
-            localization={{
-              signIn: {
-                formButtonPrimary: 'Sign in',
-                title: 'Sign in',
-                subtitle: '',
-                alternativeMethods: '',
-                forgotPassword: '',
-                footerActionLink: 'Request access',
-                footerActionText: "Don't have access?",
-                socialButtonsBlockButton: 'Continue with {strategy}',
-                resetPassword: {
-                  formButtonPrimary: 'Reset password',
-                  title: 'Reset password',
-                  subtitle: '',
-                },
-              },
-            }}
           />
         </section>
       </div>

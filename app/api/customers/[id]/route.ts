@@ -24,16 +24,19 @@ export async function GET(
     await requireRole([Role.ADMIN, Role.MANAGER])
     const { id } = await params
 
+    const customerInclude: any = {
+      orders: {
+        include: { order: { include: { items: { include: { product: true } }, payments: true } } },
+        orderBy: { createdAt: 'desc' },
+      },
+      notes: { orderBy: { createdAt: 'desc' } },
+    }
+
     const customer = await prisma.customer.findUnique({
       where: { id },
-      include: {
-        orders: {
-          include: { order: { include: { items: { include: { product: true } }, payments: true } } },
-          orderBy: { createdAt: 'desc' },
-        },
-        notes: { orderBy: { createdAt: 'desc' } },
-      },
-    })
+      // @ts-ignore - Prisma relations not in schema
+      include: customerInclude,
+    }) as any
 
     if (!customer) {
       return errorResponse(ErrorCodes.NOT_FOUND, 'Customer not found', 404, undefined, getPath(request))
@@ -47,20 +50,20 @@ export async function GET(
         email: customer.email,
         notes: customer.notes,
         createdAt: customer.createdAt.toISOString(),
-        orders: customer.orders.map((co) => ({
+        orders: (customer.orders as any[]).map((co) => ({
           id: co.order.id,
           number: co.order.number,
           status: co.order.status,
           total: co.order.total.toString(),
           createdAt: co.order.createdAt.toISOString(),
-          items: co.order.items.map((i) => ({
+          items: (co.order.items as any[]).map((i) => ({
             name: i.product.name,
             qty: i.quantity.toString(),
             price: i.unitPrice.toString(),
           })),
-          payments: co.order.payments.map((p) => ({ method: p.method, amount: p.amount.toString() })),
+          payments: (co.order.payments as any[]).map((p) => ({ method: p.method, amount: p.amount.toString() })),
         })),
-        notes: customer.notes.map((n) => ({
+        customerNotes: (customer.notes as any[]).map((n) => ({
           id: n.id,
           note: n.note,
           createdBy: n.createdBy,

@@ -8,7 +8,7 @@ import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 const healthUpdateSchema = z.object({
   provider: z.string().min(1),
   status: z.enum(['healthy', 'degraded', 'down']),
-  details: z.record(z.unknown()).optional(),
+  details: z.record(z.string(), z.unknown()).optional(),
 })
 
 function getPath(request: NextRequest): string {
@@ -61,8 +61,8 @@ export async function POST(request: NextRequest) {
 
     const record = await prisma.integrationHealth.upsert({
       where: { provider },
-      update: { status, details, checkedAt: new Date() },
-      create: { provider, status, details },
+      update: { status, details: details as any, checkedAt: new Date() },
+      create: { provider, status, details: details as any },
     })
 
     await prisma.auditLog.create({

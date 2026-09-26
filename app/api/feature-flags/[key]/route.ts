@@ -37,7 +37,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     })
 
     await prisma.auditLog.create({
-      data: { userId: staff.id, action: 'UPDATE_FEATURE_FLAG', entity: 'FeatureFlag', entityId: flag.id, metadata: { key, enabled: updated.enabled } },
+      data: { userId: staff.id, action: 'UPDATE_FEATURE_FLAG', entity: 'FeatureFlag', entityId: flag.key, metadata: { key, enabled: updated.enabled } },
     })
 
     return successResponse({ flag: updated })
@@ -66,7 +66,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     await prisma.featureFlag.delete({ where: { key } })
 
     await prisma.auditLog.create({
-      data: { userId: staff.id, action: 'DELETE_FEATURE_FLAG', entity: 'FeatureFlag', entityId: flag.id, metadata: { key } },
+      data: { userId: staff.id, action: 'DELETE_FEATURE_FLAG', entity: 'FeatureFlag', entityId: flag.key, metadata: { key } },
     })
 
     return successResponse({ success: true })

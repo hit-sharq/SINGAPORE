@@ -25,9 +25,10 @@ export async function GET(request: NextRequest) {
     if (entity) where.entity = { contains: entity, mode: 'insensitive' }
     if (userId) where.userId = userId
     if (startDate || endDate) {
-      where.createdAt = {}
-      if (startDate) where.createdAt = { ...where.createdAt, gte: new Date(startDate) }
-      if (endDate) where.createdAt = { ...where.createdAt, lte: new Date(endDate) }
+      const createdAtFilter: Record<string, Date> = {}
+      if (startDate) createdAtFilter.gte = new Date(startDate)
+      if (endDate) createdAtFilter.lte = new Date(endDate)
+      where.createdAt = createdAtFilter
     }
 
     const [logs, total] = await Promise.all([
