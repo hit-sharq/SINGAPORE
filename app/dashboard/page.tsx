@@ -26,7 +26,8 @@ import {
   LogOut,
   Mail,
   Menu,
-  MoreHorizontal,
+   MoreHorizontal,
+   MoreVertical,
   Package,
   Percent,
   Plus,
@@ -822,6 +823,7 @@ function FloorView({ data, onRefresh }: { data: DashboardData; onRefresh: () => 
   const [newTableName, setNewTableName] = useState('')
   const [newTableCapacity, setNewTableCapacity] = useState(4)
   const [updatingTable, setUpdatingTable] = useState<string | null>(null)
+  const [showActions, setShowActions] = useState<string | null>(null)
 
   const handleAddTable = async () => {
     if (!newTableName.trim()) return
@@ -944,30 +946,47 @@ function FloorView({ data, onRefresh }: { data: DashboardData; onRefresh: () => 
               {getTableGuest(table) && (
                 <p className="mt-3 text-[10px] text-[#d8a85b]">{getTableGuest(table)}</p>
               )}
-              <div className="mt-4 flex items-center gap-2">
-                {(['AVAILABLE', 'OCCUPIED', 'RESERVED', 'CLEANING'] as const).map((status) => (
-                  <button
-                    key={status}
-                    disabled={updatingTable === table.id || table.status === status}
-                    onClick={() => handleStatusChange(table.id, status)}
-                    className={`flex-1 text-[9px] font-semibold px-2 py-1.5 rounded ${
-                      table.status === status
-                        ? `bg-${statusColors[status]}/20 text-${statusColors[status]}`
-                        : 'bg-white/[0.04] text-[#777971] hover:bg-white/[0.08]'
-                    }`}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-2 flex gap-2">
+              <div className="mt-4 flex items-center justify-between">
                 <button
                   onClick={() => handleDeleteTable(table.id, table.name)}
                   disabled={updatingTable === table.id}
-                  className="flex-1 text-[9px] text-red-400 hover:text-red-300"
+                  className="text-[9px] text-red-400 hover:text-red-300"
                 >
                   Delete
                 </button>
+                <div className="relative z-50">
+                  <button
+                    onClick={() => setShowActions(showActions === table.id ? null : table.id)}
+                    aria-label="Table actions"
+                    className="p-1.5 text-[#777971] hover:text-[#d0d0c9]"
+                  >
+                    <MoreVertical size={14} />
+                  </button>
+                  {showActions === table.id && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-full right-0 mt-1 w-48 border border-white/[0.08] bg-[#181a17] shadow-xl z-50"
+                    >
+                      {(['AVAILABLE', 'OCCUPIED', 'RESERVED', 'CLEANING'] as const).map((status) => (
+                        <button
+                          key={status}
+                          disabled={updatingTable === table.id || table.status === status}
+                          onClick={() => {
+                            handleStatusChange(table.id, status)
+                            setShowActions(null)
+                          }}
+                          className={`w-full px-3 py-2 text-left text-xs ${
+                            table.status === status
+                              ? `bg-${statusColors[status]}/20 text-${statusColors[status]}`
+                              : 'text-[#a4a59e] hover:bg-white/[0.06] hover:text-white'
+                          }`}
+                        >
+                          Set to {status}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ))
