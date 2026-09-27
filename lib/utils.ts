@@ -91,12 +91,13 @@ export function getInitials(name: string): string {
 export function getTableDetail(table: any): string {
   if (!table) return '—'
   const parts = []
-  if (table.currentOrder) parts.push(`Order #${table.currentOrder.number}`)
+  const activeOrder = table.orders?.[0]
+  if (activeOrder) parts.push(`Order #${activeOrder.number}`)
   if (table.guestCount) parts.push(`${table.guestCount} guests`)
   return parts.join(' · ') || 'Available'
 }
 
 export function getTableGuest(table: any): string | undefined {
-  if (!table?.currentOrder) return undefined
-  return table.currentOrder.guestName || 'Walk-in'
+  if (!table?.orders?.[0]) return undefined
+  return 'Walk-in'
 }

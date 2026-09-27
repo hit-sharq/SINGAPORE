@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Table2, X, Users, Truck, RefreshCw } from 'lucide-react'
+import { Plus, Table2, X, Trash2, MoreVertical } from 'lucide-react'
 
 type Table = {
   id: string
   name: string
   capacity: number
   status: 'AVAILABLE' | 'OCCUPIED' | 'RESERVED' | 'CLEANING'
-  currentOrder: { id: string; number: number; guest: { name: string } } | null
+  orders: { id: string; number: number; total: string; payments: { method: string; status: string }[] }[]
 }
 
 export default function FloorPage() {
@@ -18,6 +18,7 @@ export default function FloorPage() {
   const [newTableName, setNewTableName] = useState('')
   const [newTableCapacity, setNewTableCapacity] = useState(4)
   const [updatingTable, setUpdatingTable] = useState<string | null>(null)
+  const [showActions, setShowActions] = useState<string | null>(null)
 
   useEffect(() => {
     loadTables()
@@ -49,7 +50,7 @@ export default function FloorPage() {
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to create table')
+        throw new Error(error.message || 'Failed to create table')
       }
       setShowAddTable(false)
       setNewTableName('')
@@ -64,6 +65,7 @@ export default function FloorPage() {
 
   const handleStatusChange = async (tableId: string, status: 'AVAILABLE' | 'OCCUPIED' | 'RESERVED' | 'CLEANING') => {
     setUpdatingTable(tableId)
+    setShowActions(null)
     try {
       const response = await fetch(`/api/tables/${tableId}`, {
         method: 'PATCH',
@@ -72,7 +74,7 @@ export default function FloorPage() {
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to update table')
+        throw new Error(error.message || 'Failed to update table')
       }
       loadTables()
     } catch (err) {
@@ -84,6 +86,7 @@ export default function FloorPage() {
 
   const handleDeleteTable = async (tableId: string, tableName: string) => {
     if (!confirm(`Delete table "${tableName}"? This cannot be undone.`)) return
+    setShowActions(null)
     setUpdatingTable(tableId)
     try {
       const response = await fetch(`/api/tables/${tableId}`, {
@@ -91,7 +94,7 @@ export default function FloorPage() {
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to delete table')
+        throw new Error(error.message || 'Failed to delete table')
       }
       loadTables()
     } catch (err) {
@@ -109,8 +112,9 @@ export default function FloorPage() {
   }
 
   const getTableDetail = (table: Table) => {
-    if (table.status === 'OCCUPIED' && table.currentOrder) {
-      return `Order #${table.currentOrder.number} · ${table.currentOrder.guest.name}`
+    if (table.status === 'OCCUPIED' && table.orders?.length > 0) {
+      const order = table.orders[0]
+      return `Order #${order.number}`
     }
     if (table.status === 'RESERVED') return 'Reserved'
     if (table.status === 'CLEANING') return 'Cleaning in progress'
@@ -141,69 +145,92 @@ export default function FloorPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {tables.length === 0 ? (
-          <p className="col-span-full text-xs text-[#777971]">No tables configured.</p>
+          <p className="col-span-full text-center text-xs text-[#777971] py-8">No tables configured.</p>
         ) : (
-          tables.map((table) => (
-            <div
-              key={table.id}
-              className={`border p-4 ${
-                table.status === 'OCCUPIED'
-                  ? 'border-[#d8a85b]/40 bg-[#211e17]'
-                  : 'border-white/[0.08] bg-[#181a17]'
-              }`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex size-9 items-center justify-center rounded-md bg-[#2d302a] text-[#b4b4aa]">
-                  <Table2 size={17} />
-                </div>
-                <span
-                  className={`text-[9px] font-semibold tracking-[0.12em] ${
-                    table.status === 'OCCUPIED'
-                      ? 'text-[#d8a85b]'
-                      : table.status === 'RESERVED'
-                      ? 'text-[#d78d6f]'
-                      : table.status === 'CLEANING'
-                      ? 'text-[#a4a59e]'
-                      : 'text-[#7cc58f]'
-                  }`}
-                >
-                  {table.status}
-                </span>
-              </div>
-              <p className="mt-5 text-[11px] font-semibold tracking-[0.13em] text-[#d7d6ce]">{table.name}</p>
-              <p className="mt-1 text-xs text-[#777971]">{getTableDetail(table)}</p>
-              {table.status === 'OCCUPIED' && table.currentOrder && (
-                <p className="mt-3 text-[10px] text-[#d8a85b]">{table.currentOrder.guest.name}</p>
-              )}
-              <div className="mt-4 flex items-center gap-2">
-                {(['AVAILABLE', 'OCCUPIED', 'RESERVED', 'CLEANING'] as const).map((status) => (
-                  <button
-                    key={status}
-                    disabled={updatingTable === table.id || table.status === status}
-                    onClick={() => handleStatusChange(table.id, status)}
-                    className={`flex-1 text-[9px] font-semibold px-2 py-1.5 rounded ${
-                      table.status === status
-                        ? `bg-[${statusColors[status]}]/20 text-[${statusColors[status]}]`
-                        : 'bg-white/[0.04] text-[#777971] hover:bg-white/[0.08]'
+          tables.map((table) => {
+            const color = statusColors[table.status]
+            return (  <div
+                key={table.id}
+                className={`relative border p-4 min-h-[160px] flex flex-col overflow-visible ${
+                  table.status === 'OCCUPIED'
+                    ? 'border-[#d8a85b]/40 bg-[#211e17]'
+                    : 'border-white/[0.08] bg-[#181a17]'
+                }`}
+              >
+                {/* Status badge - current state */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex size-8 items-center justify-center rounded-md bg-[#2d302a] text-[#b4b4aa] shrink-0">
+                    <Table2 size={16} />
+                  </div>
+                  <span
+                    className={`text-[9px] font-semibold tracking-[0.12em] px-2 py-0.5 rounded shrink-0 whitespace-nowrap ${
+                      table.status === 'OCCUPIED'
+                        ? 'text-[#d8a85b] bg-[#d8a85b]/15'
+                        : table.status === 'RESERVED'
+                        ? 'text-[#d78d6f] bg-[#d78d6f]/15'
+                        : table.status === 'CLEANING'
+                        ? 'text-[#a4a59e] bg-[#a4a59e]/15'
+                        : 'text-[#7cc58f] bg-[#7cc58f]/15'
                     }`}
                   >
-                    {status}
+                    {table.status}
+                  </span>
+                </div>
+
+                {/* Table name & detail */}
+                <div className="mt-4 flex-1 min-w-0">
+                  <p className="text-[12px] font-semibold tracking-[0.1em] text-[#d7d6ce] truncate">{table.name}</p>
+                  <p className="mt-1 text-xs text-[#777971] truncate">{getTableDetail(table)}</p>
+                  {table.status === 'OCCUPIED' && table.orders?.length > 0 && (
+                    <p className="mt-2 text-[10px] text-[#d8a85b] truncate">Order #{table.orders[0].number}</p>
+                  )}
+                </div>
+
+                {/* Actions dropdown */}
+                <div className="mt-4 pt-3 border-t border-white/[0.05] flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => setShowActions(showActions === table.id ? null : table.id)}
+                    className="p-1.5 text-[#777971] hover:text-white hover:bg-white/[0.05] rounded transition"
+                    aria-label="Table actions"
+                  >
+                    <MoreVertical size={16} />
                   </button>
-                ))}
+                  {showActions === table.id && (
+                    <div className="absolute top-full right-0 mt-2 w-48 bg-[#181a17] border border-white/[0.08] rounded-lg shadow-xl py-1 z-50">
+                      {(['AVAILABLE', 'OCCUPIED', 'RESERVED', 'CLEANING'] as const).map((status) => {
+                        const statusColor = statusColors[status]
+                        return (
+                          <button
+                            key={status}
+                            disabled={updatingTable === table.id || table.status === status}
+                            onClick={() => handleStatusChange(table.id, status)}
+                            className={`w-full text-left px-3 py-2 text-[11px] font-medium transition ${
+                              table.status === status
+                                ? `text-[${statusColor}] bg-[${statusColor}]/10`
+                                : 'text-[#a4a59e] hover:bg-white/[0.04] hover:text-white'
+                            }`}
+                          >
+                            {table.status === status ? '✓ ' : ''}Set to {status}
+                          </button>
+                        )
+                      })}
+                      <hr className="my-1 border-white/[0.06]" />
+                      <button
+                        disabled={updatingTable === table.id}
+                        onClick={() => handleDeleteTable(table.id, table.name)}
+                        className="w-full text-left px-3 py-2 text-[11px] font-medium text-red-400 hover:bg-red-500/10 flex items-center gap-2"
+                      >
+                        <Trash2 size={14} />
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="mt-2 flex gap-2">
-                <button
-                  onClick={() => handleDeleteTable(table.id, table.name)}
-                  disabled={updatingTable === table.id}
-                  className="flex-1 text-[9px] text-red-400 hover:text-red-300"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
 

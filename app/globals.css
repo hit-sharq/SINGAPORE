@@ -118,6 +118,11 @@ body { @apply bg-background text-foreground; font-family: Arial, Helvetica, sans
     @apply pl-0;
   }
 }
+@media (min-width: 1024px) {
+  .dashboard-content {
+    @apply pl-[228px];
+  }
+}
 
 /* Mobile-first modal sizing */
 .responsive-modal {

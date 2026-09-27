@@ -91,13 +91,16 @@ export default function POSPage() {
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: cart, tableId: null }),
+        body: JSON.stringify({ items: cart.map((item) => ({ productId: item.id, quantity: item.quantity })), tableId: null }),
       })
-      if (!res.ok) throw new Error('Failed to create order')
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Failed to create order')
+      }
       setCart([])
       alert('Order sent!')
     } catch (e) {
-      alert('Failed to create order')
+      alert(e instanceof Error ? e.message : 'Failed to create order')
     }
   }
 

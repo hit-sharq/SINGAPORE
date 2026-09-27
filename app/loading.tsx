@@ -1,27 +1,20 @@
 'use client'
 
-import Script from 'next/script'
+import { useEffect } from 'react'
 
 export default function Loading() {
+  useEffect(() => {
+    try {
+      const theme = localStorage.getItem('theme')
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      if (theme === 'dark' || (!theme && systemDark)) {
+        document.documentElement.classList.add('dark')
+      }
+    } catch (e) {}
+  }, [])
+
   return (
     <>
-      <Script
-        id="theme-init"
-        strategy="beforeInteractive"
-        dangerouslySetInnerHTML={{
-          __html: `
-            (function() {
-              try {
-                var theme = localStorage.getItem('theme');
-                var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                if (theme === 'dark' || (!theme && systemDark)) {
-                  document.documentElement.classList.add('dark');
-                }
-              } catch (e) {}
-            })();
-          `,
-        }}
-      />
       <style dangerouslySetInnerHTML={{
         __html: `
           html.dark { color-scheme: dark; }

@@ -28,16 +28,16 @@ export async function GET(request: NextRequest) {
         orderBy: { name: 'asc' },
       }),
       prisma.$queryRaw`
-        SELECT p.id, p.name, p.category, 
+        SELECT p.id, p.name, p."categoryId", 
           COALESCE(SUM(oi.quantity)::int, 0) as sold,
           COALESCE(SUM(oi."totalPrice")::text, '0') as revenue,
           COALESCE(AVG(oi."unitPrice")::text, '0') as avgPrice
         FROM "Product" p
         LEFT JOIN "OrderItem" oi ON p.id = oi."productId"
         LEFT JOIN "Order" o ON oi."orderId" = o.id AND o.status = 'PAID' AND o."createdAt" >= ${start}
-        GROUP BY p.id, p.name, p.category
+        GROUP BY p.id, p.name, p."categoryId"
         ORDER BY sold DESC
-      ` as unknown as { id: string; name: string; category: string | null; sold: number; revenue: string; avgPrice: string }[],
+      ` as unknown as { id: string; name: string; categoryId: string | null; sold: number; revenue: string; avgPrice: string }[],
       prisma.stockMovement.findMany({
         where: { createdAt: { gte: start } },
         orderBy: { createdAt: 'desc' },

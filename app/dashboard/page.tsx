@@ -128,9 +128,10 @@ type POSViewProps = {
   onAddToCart: (product: Product) => void
   onRemoveFromCart: (productId: string) => void
   cartTotal: number
-  onCheckout: () => void
+  onCheckout: (tableId: string | null) => void
   showSale: boolean
   setShowSale: (showSale: boolean) => void
+  tables: TableInfo[]
 }
 
 const navItems = [
@@ -330,17 +331,17 @@ function OverviewView({
             {data.activeTabs === 0 ? 'No active tabs. Ready for a fresh start.' : `${data.activeTabs} active ${data.activeTabs === 1 ? 'tab' : 'tabs'} on the floor.`}
           </p>
         </div>
-        <div className="flex gap-2">
+          <div className="flex gap-2">
           <button
             onClick={() => setShowSale(true)}
-            className="flex items-center gap-2 rounded-md bg-[#d8a85b] px-4 py-2.5 text-xs font-semibold text-[#1b1914] transition hover:bg-[#e4b96d]"
+            className="flex items-center gap-2 rounded-md bg-[#d8a85b] px-4 py-2.5 text-xs font-semibold text-[#1b1914] transition hover:bg-[#e4b96d] min-h-[44px]"
           >
             <Plus size={15} />
             New sale
           </button>
           <button
             onClick={() => setActiveNav('Overview')}
-            className="flex items-center gap-2 rounded-md border border-white/[0.1] bg-white/[0.025] px-4 py-2.5 text-xs font-medium text-[#d0d0c9] hover:bg-white/[0.06]"
+            className="flex items-center gap-2 rounded-md border border-white/[0.1] bg-white/[0.025] px-4 py-2.5 text-xs font-medium text-[#d0d0c9] hover:bg-white/[0.06] min-h-[44px]"
           >
             <CalendarDays size={15} />
             Today
@@ -350,12 +351,12 @@ function OverviewView({
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
         {statCards.map((card) => (
-          <div key={card.label} className="border border-white/[0.08] bg-[#181a17] p-4">
-            <p className="text-[10px] uppercase tracking-[0.11em] text-[#787a73]">{card.label}</p>
-            <p className="mt-3 text-lg font-semibold tracking-tight">{card.value}</p>
+          <div key={card.label} className="min-w-0 border border-white/[0.08] bg-[#181a17] p-4">
+            <p className="truncate text-[10px] uppercase tracking-[0.11em] text-[#787a73]">{card.label}</p>
+            <p className="mt-3 text-lg font-semibold tracking-tight truncate">{card.value}</p>
             <p className={`mt-2 flex items-center gap-1 text-[10px] ${card.positive ? 'text-[#7cc58f]' : 'text-[#d8a85b]'}`}>
               {card.positive ? <ArrowUpRight size={12} /> : <Clock3 size={12} />}
-              {card.change}
+              <span className="truncate">{card.change}</span>
             </p>
           </div>
         ))}
@@ -370,7 +371,7 @@ function OverviewView({
             </div>
             <button
               onClick={() => setActiveNav('Reports')}
-              className="flex items-center gap-1.5 text-xs text-[#a5a69f] hover:text-[#d8a85b]"
+              className="flex items-center gap-1.5 text-xs text-[#a5a69f] hover:text-[#d8a85b] min-h-[36px] px-2"
             >
               This week <ChevronDown size={13} />
             </button>
@@ -480,7 +481,7 @@ function OverviewView({
             </div>
             <button
               onClick={() => setActiveNav('Floor & Pool')}
-              className="text-xs font-medium text-[#d8a85b] hover:underline"
+              className="text-xs font-medium text-[#d8a85b] hover:underline min-h-[36px] px-2"
             >
               Manage floor →
             </button>
@@ -517,8 +518,8 @@ function OverviewView({
                       {table.status}
                     </span>
                   </div>
-                  <p className="mt-5 text-[11px] font-semibold tracking-[0.13em] text-[#d7d6ce]">{table.name}</p>
-                  <p className="mt-1 text-xs text-[#777971]">{getTableDetail(table)}</p>
+                   <p className="mt-5 truncate text-[11px] font-semibold tracking-[0.13em] text-[#d7d6ce]">{table.name}</p>
+                   <p className="mt-1 truncate text-xs text-[#777971]">{getTableDetail(table)}</p>
                   {getTableGuest(table) && (
                     <p className="mt-3 text-[10px] text-[#d8a85b]">{getTableGuest(table)}</p>
                   )}
@@ -536,7 +537,7 @@ function OverviewView({
             </div>
             <button
               onClick={() => setActiveNav('Orders')}
-              className="text-xs font-medium text-[#d8a85b] hover:underline"
+              className="text-xs font-medium text-[#d8a85b] hover:underline min-h-[36px] px-2"
             >
               View all →
             </button>
@@ -579,7 +580,8 @@ function OverviewView({
   )
 }
 
-function POSView({ products, categories, activeCategory, query, filteredProducts, cart, onCategoryChange, onQueryChange, onAddToCart, onRemoveFromCart, cartTotal, onCheckout, showSale, setShowSale }: POSViewProps) {
+function POSView({ products, categories, activeCategory, query, filteredProducts, cart, onCategoryChange, onQueryChange, onAddToCart, onRemoveFromCart, cartTotal, onCheckout, showSale, setShowSale, tables }: POSViewProps) {
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null)
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowSale(false) }
     window.addEventListener('keydown', handleEscape)
@@ -708,9 +710,27 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
               </div>
             </div>
 
+            <div className="mt-4">
+              <label className="block text-[10px] uppercase tracking-[0.12em] text-[#787a73] mb-1.5">
+                Table
+              </label>
+              <select
+                value={selectedTableId ?? ''}
+                onChange={(e) => setSelectedTableId(e.target.value || null)}
+                className="w-full border border-white/[0.08] bg-[#20221e] py-2 px-3 text-sm text-[#d0d0c9] outline-none focus:border-[#d8a85b]/60"
+              >
+                <option value="">No table (takeaway)</option>
+                {tables.map((table) => (
+                  <option key={table.id} value={table.id}>
+                    {table.name} · {table.status}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <button
               disabled={cart.length === 0}
-              onClick={onCheckout}
+              onClick={() => { onCheckout(selectedTableId); setSelectedTableId(null) }}
               className="mt-4 w-full rounded-md bg-[#d8a85b] py-2.5 text-xs font-semibold text-[#1b1914] transition hover:bg-[#e4b96d] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Send to table
@@ -722,7 +742,7 @@ function POSView({ products, categories, activeCategory, query, filteredProducts
   )
 }
 
-function OrdersView({ data, onOrderClick, products, categories, activeCategory, query, filteredProducts, cart, onCategoryChange, onQueryChange, onAddToCart, onRemoveFromCart, cartTotal, onCheckout }: { data: DashboardData; onOrderClick: (orderId: string) => void; products: Product[]; categories: string[]; activeCategory: string; query: string; filteredProducts: Product[]; cart: CartItem[]; onCategoryChange: (category: string) => void; onQueryChange: (query: string) => void; onAddToCart: (product: Product) => void; onRemoveFromCart: (productId: string) => void; cartTotal: number; onCheckout: () => void }) {
+function OrdersView({ data, onOrderClick, products, categories, activeCategory, query, filteredProducts, cart, onCategoryChange, onQueryChange, onAddToCart, onRemoveFromCart, cartTotal, onCheckout }: { data: DashboardData; onOrderClick: (orderId: string) => void; products: Product[]; categories: string[]; activeCategory: string; query: string; filteredProducts: Product[]; cart: CartItem[]; onCategoryChange: (category: string) => void; onQueryChange: (query: string) => void; onAddToCart: (product: Product) => void; onRemoveFromCart: (productId: string) => void; cartTotal: number; onCheckout: (tableId: string | null) => void }) {
   const [showSale, setShowSale] = useState(false)
 
   return (
@@ -749,10 +769,11 @@ function OrdersView({ data, onOrderClick, products, categories, activeCategory, 
         onAddToCart={onAddToCart}
         onRemoveFromCart={onRemoveFromCart}
         cartTotal={cartTotal}
-        onCheckout={onCheckout}
-        showSale={showSale}
-        setShowSale={setShowSale}
-      />}
+         onCheckout={onCheckout}
+         showSale={showSale}
+         setShowSale={setShowSale}
+         tables={data.tables}
+       />}
       <div className="border border-white/[0.08] bg-[#181a17]">
         {data.recentOrders.length === 0 ? (
           <p className="px-4 py-3.5 text-xs text-[#777971]">No orders found.</p>
@@ -813,7 +834,7 @@ function FloorView({ data, onRefresh }: { data: DashboardData; onRefresh: () => 
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to create table')
+        throw new Error(error.message || 'Failed to create table')
       }
       setShowAddTable(false)
       setNewTableName('')
@@ -836,7 +857,7 @@ function FloorView({ data, onRefresh }: { data: DashboardData; onRefresh: () => 
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to update table')
+        throw new Error(error.message || 'Failed to update table')
       }
       onRefresh()
     } catch (err) {
@@ -855,7 +876,7 @@ function FloorView({ data, onRefresh }: { data: DashboardData; onRefresh: () => 
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to delete table')
+        throw new Error(error.message || 'Failed to delete table')
       }
       onRefresh()
     } catch (err) {
@@ -1064,10 +1085,10 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to create product')
+        throw new Error(error.message || 'Failed to create product')
       }
       const newProduct = await response.json()
-      setProducts((prev) => [...prev, newProduct].sort((a, b) => a.category.name.localeCompare(b.category.name)))
+      setProducts((prev) => [...prev, newProduct.data.product].sort((a, b) => a.category.name.localeCompare(b.category.name)))
       setShowAddProduct(false)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to create product')
@@ -1086,10 +1107,10 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to create category')
+        throw new Error(error.message || 'Failed to create category')
       }
       const newCategory = await response.json()
-      setCategories((prev) => [...prev, newCategory].sort((a, b) => a.name.localeCompare(b.name)))
+      setCategories((prev) => [...prev, newCategory.data.category].sort((a, b) => a.name.localeCompare(b.name)))
       setShowAddCategory(false)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to create category')
@@ -1119,10 +1140,10 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to update product')
+        throw new Error(error.message || 'Failed to update product')
       }
       const updated = await response.json()
-      setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? updated : p)))
+      setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? updated.data.product : p)))
       setEditingProduct(null)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update product')
@@ -1141,10 +1162,10 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to adjust stock')
+        throw new Error(error.message || 'Failed to adjust stock')
       }
       const result = await response.json()
-      setProducts((prev) => prev.map((p) => (p.id === productId ? result.product : p)))
+      setProducts((prev) => prev.map((p) => (p.id === productId ? result.data.product : p)))
       onRefresh()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to adjust stock')
@@ -1162,7 +1183,7 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to delete product')
+        throw new Error(error.message || 'Failed to delete product')
       }
       setProducts((prev) => prev.filter((p) => p.id !== productId))
     } catch (err) {
@@ -1459,7 +1480,7 @@ function CustomersView({ data }: { data: DashboardData }) {
       const res = await fetch('/api/customers')
       if (res.ok) {
         const d = await res.json()
-        setCustomers(d.customers)
+        setCustomers(d.data?.customers ?? [])
       }
     } catch (e) {
       console.error('Failed to load customers:', e)
@@ -3933,8 +3954,8 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
         throw new Error(data.error || 'Payment failed')
       }
       // PesaPal returns a redirectUrl — send the user to PesaPal's payment page
-      if (method === 'PESAPAL' && data.redirectUrl) {
-        window.location.href = data.redirectUrl
+      if (method === 'PESAPAL' && data.data?.redirectUrl) {
+        window.location.href = data.data.redirectUrl
         return
       }
       onRefresh()
@@ -3956,7 +3977,7 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to update order')
+        throw new Error(error.message || 'Failed to update order')
       }
       onRefresh()
     } catch (err) {
@@ -3989,7 +4010,7 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="border border-white/[0.08] bg-[#181a17] p-4">
               <p className="text-[10px] uppercase tracking-[0.1em] text-[#787a73]">Status</p>
-              <p className="mt-1 text-sm font-semibold capitalize">{order.status.toLowerCase()}</p>
+              <p className="mt-1 text-sm font-semibold capitalize">{order.status?.toLowerCase() ?? 'pending'}</p>
             </div>
             <div className="border border-white/[0.08] bg-[#181a17] p-4">
               <p className="text-[10px] uppercase tracking-[0.1em] text-[#787a73]">Table</p>
@@ -4315,8 +4336,8 @@ export default function Page() {
     try {
       const response = await fetch('/api/shifts/current')
       if (response.ok) {
-        const data = await response.json()
-        setShift(data.shift)
+      const data = await response.json()
+      setShift(data.data?.shift ?? null)
       }
     } catch (err) {
       console.error('Failed to fetch shift:', err)
@@ -4327,8 +4348,8 @@ export default function Page() {
     try {
       const response = await fetch(`/api/orders/${orderId}`)
       if (!response.ok) throw new Error('Failed to fetch order')
-      const order = await response.json()
-      setSelectedOrder(order)
+      const json = await response.json()
+      setSelectedOrder(json.data.order)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to load order')
     }
@@ -4360,10 +4381,10 @@ export default function Page() {
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to open shift')
+        throw new Error(error.message || 'Failed to open shift')
       }
       const newShift = await response.json()
-      setShift(newShift)
+      setShift(newShift.data?.shift ?? null)
       setShowShiftModal(false)
       setOpeningCash('0')
     } catch (err) {
@@ -4384,10 +4405,11 @@ export default function Page() {
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to close shift')
+        throw new Error(error.message || 'Failed to close shift')
       }
       const closedShift = await response.json()
-      setShift(closedShift.status === 'CLOSED' ? null : closedShift)
+      const shiftData = closedShift.data?.shift
+      setShift(shiftData?.status === 'CLOSED' ? null : shiftData)
       setShowShiftModal(false)
       setClosingCash('')
       refreshDashboard()
@@ -4414,7 +4436,7 @@ export default function Page() {
         ])
         setData(dashData)
         setProducts(prodData.data.products)
-        if (shiftData.shift) setShift(shiftData.shift)
+        if (shiftData.data?.shift) setShift(shiftData.data.shift)
       } catch {
         setError(true)
       } finally {
@@ -4454,7 +4476,7 @@ export default function Page() {
     setCart((current) => current.filter((item) => item.id !== productId))
   }
 
-  async function handleCheckout() {
+  async function handleCheckout(tableId: string | null) {
     if (cart.length === 0) return
 
     const items = cart.map((item) => ({
@@ -4466,12 +4488,12 @@ export default function Page() {
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, tableId }),
       })
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to create order')
+        throw new Error(error.message || 'Failed to create order')
       }
 
       setCart([])
@@ -4523,6 +4545,7 @@ export default function Page() {
               onCheckout={handleCheckout}
               showSale={showSale}
               setShowSale={setShowSale}
+              tables={dashboardData.tables}
             />
           </>
         )

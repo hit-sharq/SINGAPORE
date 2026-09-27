@@ -34,8 +34,7 @@ export async function GET(
 
     const customer = await prisma.customer.findUnique({
       where: { id },
-      // @ts-ignore - Prisma relations not in schema
-      include: customerInclude,
+       include: customerInclude,
     }) as any
 
     if (!customer) {
