@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { Truck, FileText, ChevronLeft, ChevronRight, CalendarDays, Package, CreditCard, Users, UserCog } from 'lucide-react'
 import { formatTime } from '@/lib/utils'
+import { AdminBackLink } from '@/components/admin-back-link'
+import { AdminTabs } from '@/components/admin-tabs'
 
 const exportEntities = [
   { value: 'orders', label: 'Orders' },
@@ -84,6 +86,8 @@ export default function DataExportPage() {
 
   return (
     <div className="min-h-screen bg-[#111210] text-[#f3f0e9] p-4 sm:p-6 lg:p-8 space-y-6">
+      <AdminBackLink />
+      <AdminTabs />
       <div>
         <h1 className="text-2xl font-semibold flex items-center gap-2">
           <Truck size={22} className="text-[#d8a85b]" />

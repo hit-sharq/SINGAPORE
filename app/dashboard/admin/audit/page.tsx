@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { ClipboardList, ChevronLeft, ChevronRight } from 'lucide-react'
 import { formatTime } from '@/lib/utils'
+import { AdminBackLink } from '@/components/admin-back-link'
+import { AdminTabs } from '@/components/admin-tabs'
 
 type AuditLogEntry = {
   id: string
@@ -76,6 +78,8 @@ export default function AuditLogsPage() {
 
   return (
     <div className="min-h-screen bg-[#111210] text-[#f3f0e9] p-4 sm:p-6 lg:p-8 space-y-6">
+      <AdminBackLink />
+      <AdminTabs />
       <div>
         <h1 className="text-2xl font-semibold flex items-center gap-2">
           <ClipboardList size={22} className="text-[#d8a85b]" />

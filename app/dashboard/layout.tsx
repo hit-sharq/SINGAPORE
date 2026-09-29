@@ -41,7 +41,6 @@ const workspaceNav = [
   { label: 'Customers', icon: Users, href: '/dashboard/customers', roles: ['ADMIN', 'MANAGER'] },
   { label: 'Admin', icon: Shield, href: '/dashboard/admin/staff', roles: ['ADMIN'] },
   { label: 'Reports', icon: BarChart3, href: '/dashboard/reports/daily', roles: ['ADMIN', 'MANAGER'] },
-  { label: 'Staff', icon: UserCog, href: '/dashboard/admin/staff', roles: ['ADMIN'] },
 ]
 
 function isActiveLink(href: string, pathname: string): boolean {

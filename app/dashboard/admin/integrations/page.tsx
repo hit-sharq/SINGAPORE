@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { CreditCard, Printer, Wifi } from 'lucide-react'
 import { formatTime, formatPrice } from '@/lib/utils'
+import { AdminBackLink } from '@/components/admin-back-link'
+import { AdminTabs } from '@/components/admin-tabs'
 
 type PesapalConfig = {
   consumerKey: string
@@ -108,6 +110,8 @@ export default function IntegrationsPage() {
 
   return (
     <div className="min-h-screen bg-[#111210] text-[#f3f0e9] p-4 sm:p-6 lg:p-8 space-y-8">
+      <AdminBackLink />
+      <AdminTabs />
       <div>
         <h2 className="text-2xl font-semibold mb-6">Integrations</h2>
         <h3 className="font-semibold mb-4 flex items-center gap-2">

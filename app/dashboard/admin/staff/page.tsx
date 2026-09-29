@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { UserCog, UserPlus, Trash2, Plus, Users } from 'lucide-react'
+import { UserCog, UserPlus, Trash2, Plus, Users, ChevronDown } from 'lucide-react'
 import { formatPrice } from '@/lib/utils'
+import { AdminBackLink } from '@/components/admin-back-link'
+import { AdminTabs } from '@/components/admin-tabs'
 
 type StaffMember = {
   id: string
@@ -21,6 +23,15 @@ type RoleGrant = {
   role: string
 }
 
+function StaffDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] uppercase tracking-[0.1em] text-[#777971]">{label}</p>
+      <p className="mt-0.5 truncate text-xs" title={value}>{value}</p>
+    </div>
+  )
+}
+
 export default function StaffPage() {
   const [staffList, setStaffList] = useState<StaffMember[]>([])
   const [roleGrants, setRoleGrants] = useState<RoleGrant[]>([])
@@ -29,6 +40,7 @@ export default function StaffPage() {
   const [inviteForm, setInviteForm] = useState({ email: '', name: '', role: 'CASHIER' })
   const [inviteLoading, setInviteLoading] = useState(false)
   const [grantLoading, setGrantLoading] = useState<string | null>(null)
+  const [openStaff, setOpenStaff] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -113,6 +125,8 @@ export default function StaffPage() {
 
   return (
     <div className="min-h-screen bg-[#111210] text-[#f3f0e9] p-4 sm:p-6 lg:p-8">
+      <AdminBackLink />
+      <AdminTabs />
       <div className="mb-6">
         <h1 className="text-2xl font-semibold flex items-center gap-2">
           <UserCog size={22} className="text-[#d8a85b]" />
@@ -131,97 +145,96 @@ export default function StaffPage() {
         </button>
       </div>
 
-      <div className="responsive-table">
-        <div className="table-card-view grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.06] text-[10px] font-medium uppercase tracking-[0.1em] text-[#787a73] border border-white/[0.08] bg-[#181a17]">
-          <div>Name</div>
-          <div>Email</div>
-          <div>Primary Role</div>
-          <div>Additional Roles</div>
-          <div>Status</div>
-          <div>Shifts</div>
-          <div></div>
-        </div>
+      <div className="space-y-2">
         {loading ? (
           <div className="px-4 py-8 text-center text-[#777971]">Loading staff...</div>
+        ) : staffList.length === 0 ? (
+          <p className="px-4 py-8 text-center text-[#777971]">No staff yet. Invite your first team member.</p>
         ) : (
-          staffList.map((staff) => (
-            <div key={staff.id} className="grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.03] items-center">
-              <div className="font-medium">{staff.name}</div>
-              <div className="text-[#787a73] text-sm">{staff.email}</div>
-              <div>
-                <span className="px-2 py-0.5 text-xs rounded bg-white/[0.05]">{staff.role}</span>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => (
-                  <span key={r} className="px-2 py-0.5 text-xs rounded bg-[#d8a85b]/20 text-[#d8a85b]">{r}</span>
-                ))}
-              </div>
-              <div>
-                <span className={`px-2 py-0.5 text-xs rounded ${
-                  staff.status === 'ACTIVE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                }`}>
-                  {staff.status}
-                </span>
-              </div>
-              <div className="text-sm text-[#787a73]">{staff.shiftCount} {staff.hasOpenShift && <span className="text-green-400 ml-1">●</span>}</div>
-              <div className="flex items-center justify-end gap-2">
-                {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => {
-                    const grant = roleGrants.find(g => g.userId === staff.id && g.role === r)
-                    return grant ? (
-                      <button
-                        key={`${staff.id}-${r}`}
-                        onClick={() => handleRevokeGrant(grant.id)}
-                        className="p-1 text-red-400 hover:bg-red-500/10 rounded"
-                        title={`Revoke ${r}`}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    ) : null
-                  })}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+          staffList.map((staff) => {
+            const extraRoles = staff.roles.filter((r: string) => r !== staff.role)
+            const isOpen = openStaff === staff.id
+            return (
+              <div key={staff.id} className="overflow-hidden rounded-lg border border-white/[0.08] bg-[#181a17]">
+                <button
+                  type="button"
+                  onClick={() => setOpenStaff(isOpen ? null : staff.id)}
+                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-white/[0.04]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{staff.name}</p>
+                    <p className="mt-0.5 truncate text-xs text-[#777971]">{staff.email}</p>
+                  </div>
+                  <span className="hidden shrink-0 rounded bg-white/[0.05] px-2 py-0.5 text-[10px] text-[#a4a59e] sm:inline">
+                    {staff.role}
+                  </span>
+                  {staff.hasOpenShift && (
+                    <span className="hidden shrink-0 rounded bg-[#7cc58f]/10 px-2 py-0.5 text-[10px] text-[#7cc58f] sm:inline">
+                      {staff.shiftCount} shifts · open
+                    </span>
+                  )}
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${
+                      staff.status === 'ACTIVE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                    }`}
+                  >
+                    {staff.status}
+                  </span>
+                  <ChevronDown
+                    size={16}
+                    className={`shrink-0 text-[#777971] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
 
-      <div className="staff-cards space-y-3 px-1">
-        {!loading && staffList.map((staff) => (
-          <div key={staff.id} className="border border-white/[0.08] bg-[#181a17] rounded-lg p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="font-medium truncate">{staff.name}</p>
-                <p className="text-sm text-[#787a73] truncate">{staff.email}</p>
+                {isOpen && (
+                  <div className="border-t border-white/[0.04] bg-[#141613] px-4 py-4">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+                      <StaffDetail label="Email" value={staff.email} />
+                      <StaffDetail label="Primary Role" value={staff.role} />
+                      <StaffDetail
+                        label="Shifts"
+                        value={`${staff.shiftCount}${staff.hasOpenShift ? ' · one open now' : ''}`}
+                      />
+                      <StaffDetail label="Status" value={staff.status} />
+                    </div>
+
+                    <div className="mt-4">
+                      <p className="text-[10px] uppercase tracking-[0.1em] text-[#777971]">Additional Roles</p>
+                      {extraRoles.length === 0 ? (
+                        <p className="mt-1 text-xs text-[#777971]">None</p>
+                      ) : (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {extraRoles.map((r: string) => {
+                            const grant = roleGrants.find((g) => g.userId === staff.id && g.role === r)
+                            return (
+                              <span
+                                key={`${staff.id}-${r}`}
+                                className="inline-flex items-center gap-1 rounded-md border border-[#d8a85b]/30 bg-[#d8a85b]/10 py-0.5 pl-2 pr-0.5 text-[11px] text-[#d8a85b]"
+                              >
+                                {r}
+                                {grant && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRevokeGrant(grant.id)}
+                                    title={`Revoke ${r}`}
+                                    aria-label={`Revoke ${r}`}
+                                    className="rounded p-1 text-red-400 transition hover:bg-red-500/15"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                )}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-              <span className={`px-2 py-1 text-xs rounded ${staff.status === 'ACTIVE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} shrink-0`}>
-                {staff.status}
-              </span>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="px-2 py-0.5 text-xs rounded bg-white/[0.05]">{staff.role}</span>
-              {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => (
-                <span key={r} className="px-2 py-0.5 text-xs rounded bg-[#d8a85b]/20 text-[#d8a85b]">{r}</span>
-              ))}
-            </div>
-            <div className="mt-3 flex items-center gap-4 text-sm text-[#787a73]">
-              <span>{staff.shiftCount} shifts {staff.hasOpenShift && <span className="text-green-400 ml-1">●</span>}</span>
-              <div className="flex items-center gap-1 ml-auto">
-{staff.roles.filter((r: string) => r !== staff.role).map((r: string) => {
-                    const grant = roleGrants.find(g => g.userId === staff.id && g.role === r)
-                    return grant ? (
-                      <button
-                        key={`${staff.id}-${r}-mobile`}
-                        onClick={() => handleRevokeGrant(grant.id)}
-                        className="p-1 text-red-400 hover:bg-red-500/10 rounded"
-                        title={`Revoke ${r}`}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    ) : null
-                  })}
-              </div>
-            </div>
-          </div>
-        ))}
+            )
+          })
+        )}
       </div>
 
       <div className="border border-white/[0.08] bg-[#181a17] p-4">

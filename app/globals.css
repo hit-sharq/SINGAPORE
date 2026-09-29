@@ -260,15 +260,19 @@ body { @apply bg-background text-foreground; font-family: Arial, Helvetica, sans
 }
 
 /* Dashboard header responsive */
+.dashboard-header-actions {
+  @apply flex flex-wrap items-center justify-end gap-2 sm:gap-3;
+}
 @media (max-width: 767px) {
   .dashboard-header {
-    @apply flex flex-col gap-3 items-start;
+    @apply flex flex-wrap items-center gap-3 py-3;
   }
   .dashboard-header-actions {
-    @apply w-full flex flex-col gap-2;
-  }
-  .dashboard-header-actions button {
     @apply w-full;
+  }
+  .dashboard-header-actions > div,
+  .dashboard-header-actions > button {
+    @apply max-w-full;
   }
 }
 

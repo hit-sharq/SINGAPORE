@@ -58,6 +58,24 @@ import {
 } from 'lucide-react'
 
 type Category = { name: string }
+
+function ProductDetail({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] uppercase tracking-[0.1em] text-[#777971]">{label}</p>
+      <p className={`mt-0.5 truncate text-xs ${mono ? 'font-mono' : ''}`} title={value}>{value}</p>
+    </div>
+  )
+}
+
+function StaffDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] uppercase tracking-[0.1em] text-[#777971]">{label}</p>
+      <p className="mt-0.5 truncate text-xs" title={value}>{value}</p>
+    </div>
+  )
+}
 type Product = { 
   id: string; 
   name: string; 
@@ -147,7 +165,6 @@ const navItems = [
 const adminNavItems = [
   { label: 'Admin', icon: Shield, href: '/dashboard/admin/staff', roles: ['ADMIN'] },
   { label: 'Reports', icon: BarChart3, href: '/dashboard/reports/daily', roles: ['ADMIN', 'MANAGER'] },
-  { label: 'Staff', icon: UserCog, href: '/dashboard/admin/staff', roles: ['ADMIN'] },
 ]
 
 const roleLabels: Record<string, string> = {
@@ -1058,6 +1075,7 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
   const [showAddProduct, setShowAddProduct] = useState(false)
   const [showAddCategory, setShowAddCategory] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [openProduct, setOpenProduct] = useState<string | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
 
   useEffect(() => {
@@ -1140,15 +1158,11 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
 
   const handleUpdateProduct = async (formData: FormData) => {
     if (!editingProduct) return
-    const productData = {
-      name: formData.get('name') as string,
-      sku: formData.get('sku') as string,
-      categoryId: formData.get('categoryId') as string,
-      price: formData.get('price') as string,
-      costPrice: formData.get('costPrice') as string,
-      stock: formData.get('stock') as string,
-      reorderAt: formData.get('reorderAt') as string,
-      status: formData.get('status') as 'ACTIVE' | 'INACTIVE',
+    const fields = ['name', 'sku', 'categoryId', 'price', 'costPrice', 'stock', 'reorderAt', 'status']
+    const productData: Record<string, string> = {}
+    for (const key of fields) {
+      const value = formData.get(key)
+      if (typeof value === 'string' && value !== '') productData[key] = value
     }
     setSaving(editingProduct.id)
     try {
@@ -1259,120 +1273,143 @@ function InventoryView({ data, onRefresh }: { data: DashboardData; onRefresh: ()
         </div>
       </div>
 
-      <div className="border border-white/[0.08] bg-[#181a17]">
-        <div className="grid grid-cols-8 gap-3 px-4 py-3 border-b border-white/[0.06] text-[10px] font-medium uppercase tracking-[0.1em] text-[#787a73]">
-          <div>Product</div>
-          <div>SKU</div>
-          <div>Category</div>
-          <div className="text-right">Stock</div>
-          <div className="text-right">Reorder</div>
-          <div className="text-right">Status</div>
-          <div className="text-right">Price</div>
-          <div></div>
-        </div>
+      <div className="border border-white/[0.08] bg-[#181a17] overflow-hidden">
         {products.length === 0 ? (
           <p className="px-4 py-8 text-center text-[#777971]">No products yet. Add your first product.</p>
         ) : (
-          products.map((product, i) => {
+          products.map((product) => {
             const status = getStockStatus(product)
+            const isOpen = openProduct === product.id
             const isEditing = editingProduct?.id === product.id
             return (
-              <form
-                key={product.id}
-                onSubmit={(e) => { if (isEditing) { e.preventDefault(); handleUpdateProduct(new FormData(e.currentTarget)) } }}
-                className="grid grid-cols-8 gap-3 px-4 py-3 border-t border-white/[0.04] items-center"
-                data-product-id={product.id}
-              >
-                <div className="min-w-0">
-                  <p className="text-xs font-medium truncate">{product.name}</p>
-                  {isEditing && (
-                    <input
-                      name="name"
-                      type="text"
-                      defaultValue={product.name}
-                      className="w-full h-8 rounded-md border border-white/[0.1] bg-[#20221e] px-2 text-xs outline-none focus:border-[#d8a85b]/60"
-                    />
-                  )}
-                </div>
-                <p className="text-xs text-[#777971] font-mono">{product.sku ?? '\u2014'}</p>
-                <p className="text-xs text-[#777971]">{product.category.name}</p>
-                <div className="text-right">
-                  {isEditing ? (
-                    <input
-                      name="stock"
-                      type="number"
-                      step="0.001"
-                      defaultValue={product.stock}
-                      className="w-20 h-8 rounded-md border border-white/[0.1] bg-[#20221e] px-2 text-xs text-right outline-none focus:border-[#d8a85b]/60"
-                    />
-                  ) : (
-                    <p className="text-xs font-medium">{parseFloat(product.stock).toFixed(3)}</p>
-                  )}
-                </div>
-                <p className="text-right text-xs text-[#777971]">{parseFloat(product.reorderAt).toFixed(3)}</p>
-                <span className={`text-right text-[9px] font-semibold px-2 py-0.5 rounded ${status.color} ${status.bg}`}>
-                  {status.label}
-                </span>
-                <p className="text-right text-xs text-[#777971]">{formatPrice(product.price)}</p>
-                <div className="flex items-center gap-1">
-                  {isEditing ? (
-                    <>
-                      <button
-                        type="submit"
-                        disabled={saving === product.id}
-                        className="text-[9px] text-[#7cc58f] hover:underline"
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingProduct(null)}
-                        className="text-[9px] text-[#d8a85b] hover:underline"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setEditingProduct(product)}
-                        className="text-[9px] text-[#d8a85b] hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAdjustStock(product.id, 1, 'Manual restock')}
-                        disabled={saving === product.id}
-                        className="text-[9px] text-[#7cc58f] hover:underline"
-                      >
-                        +1
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAdjustStock(product.id, -1, 'Manual adjustment')}
-                        disabled={saving === product.id || parseFloat(product.stock) <= 0}
-                        className="text-[9px] text-[#dc8c72] hover:underline"
-                      >
-                        -1
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteProduct(product.id, product.name)}
-                        className="text-[9px] text-red-400 hover:underline"
-                      >
-                        Delete
-                      </button>
-                    </>
-                  )}
-                </div>
-              </form>
+              <div key={product.id} className="border-b border-white/[0.04] last:border-b-0" data-product-id={product.id}>
+                <button
+                  type="button"
+                  onClick={() => setOpenProduct(isOpen ? null : product.id)}
+                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-white/[0.04]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{product.name}</p>
+                    <p className="mt-0.5 truncate text-xs text-[#777971]">
+                      {product.category.name}
+                      {product.sku ? ` \u00b7 ${product.sku}` : ''}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${status.color} ${status.bg}`}>
+                    {status.label}
+                  </span>
+                  <div className="shrink-0 text-right">
+                    <p className="text-[9px] uppercase tracking-[0.1em] text-[#777971]">Stock</p>
+                    <p className="tabular-nums text-sm font-medium">{parseFloat(product.stock).toFixed(3)}</p>
+                  </div>
+                  <ChevronDown
+                    size={16}
+                    className={`shrink-0 text-[#777971] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {isOpen && (
+                  <div className="border-t border-white/[0.04] bg-[#141613] px-4 py-4">
+                    <form
+                      onSubmit={(e) => {
+                        if (isEditing) {
+                          e.preventDefault()
+                          handleUpdateProduct(new FormData(e.currentTarget))
+                        }
+                      }}
+                    >
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+                        {isEditing && (
+                          <>
+                            <label className="block">
+                              <span className="mb-1 block text-[10px] uppercase tracking-[0.1em] text-[#777971]">Name</span>
+                              <input
+                                name="name"
+                                type="text"
+                                defaultValue={product.name}
+                                className="h-9 w-full rounded-md border border-white/[0.1] bg-[#20221e] px-2 text-xs outline-none focus:border-[#d8a85b]/60"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-[10px] uppercase tracking-[0.1em] text-[#777971]">Stock</span>
+                              <input
+                                name="stock"
+                                type="number"
+                                step="0.001"
+                                defaultValue={product.stock}
+                                className="h-9 w-full rounded-md border border-white/[0.1] bg-[#20221e] px-2 text-xs outline-none focus:border-[#d8a85b]/60"
+                              />
+                            </label>
+                          </>
+                        )}
+                        <ProductDetail label="SKU" value={product.sku ?? '\u2014'} mono />
+                        <ProductDetail label="Category" value={product.category.name} />
+                        <ProductDetail label="Stock" value={parseFloat(product.stock).toFixed(3)} />
+                        <ProductDetail label="Reorder Point" value={parseFloat(product.reorderAt).toFixed(3)} />
+                        <ProductDetail label="Price" value={formatPrice(product.price)} />
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        {isEditing ? (
+                          <>
+                            <button
+                              type="submit"
+                              disabled={saving === product.id}
+                              className="rounded-md bg-[#7cc58f] px-3 py-1.5 text-xs font-semibold text-[#1b1914] disabled:opacity-50"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingProduct(null)}
+                              className="rounded-md border border-white/[0.12] px-3 py-1.5 text-xs text-[#d0d0c9] hover:bg-white/[0.06]"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setEditingProduct(product)}
+                              className="rounded-md border border-[#d8a85b]/40 bg-[#d8a85b]/10 px-3 py-1.5 text-xs font-semibold text-[#d8a85b] hover:bg-[#d8a85b]/20"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAdjustStock(product.id, 1, 'Manual restock')}
+                              disabled={saving === product.id}
+                              className="rounded-md border border-[#7cc58f]/40 bg-[#7cc58f]/10 px-3 py-1.5 text-xs font-semibold text-[#7cc58f] hover:bg-[#7cc58f]/20 disabled:opacity-50"
+                            >
+                              +1
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAdjustStock(product.id, -1, 'Manual adjustment')}
+                              disabled={saving === product.id || parseFloat(product.stock) <= 0}
+                              className="rounded-md border border-[#dc8c72]/40 bg-[#dc8c72]/10 px-3 py-1.5 text-xs font-semibold text-[#dc8c72] hover:bg-[#dc8c72]/20 disabled:opacity-50"
+                            >
+                              -1
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteProduct(product.id, product.name)}
+                              className="ml-auto rounded-md border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/20"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </div>
             )
           })
         )}
-
-        </div>
+      </div>
 
         {showAddProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -3162,6 +3199,7 @@ function StaffView({ data }: { data: DashboardData }) {
   const [inviteForm, setInviteForm] = useState({ email: '', name: '', role: 'CASHIER' })
   const [inviteLoading, setInviteLoading] = useState(false)
   const [grantLoading, setGrantLoading] = useState<string | null>(null)
+  const [openStaff, setOpenStaff] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -3263,93 +3301,96 @@ function StaffView({ data }: { data: DashboardData }) {
         </button>
       </div>
 
-      <div className="staff-table-wrapper">
-        <div className="responsive-table">
-          <div className="table-card-view grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.06] text-[10px] font-medium uppercase tracking-[0.1em] text-[#787a73] border border-white/[0.08] bg-[#181a17]">
-            <div>Name</div>
-            <div>Email</div>
-            <div>Primary Role</div>
-            <div>Additional Roles</div>
-            <div>Status</div>
-            <div>Shifts</div>
-            <div></div>
-          </div>
-          {loading ? (
-            <div className="px-4 py-8 text-center text-[#777971]">Loading staff...</div>
-          ) : (
-            staffList.map((staff) => (
-              <div key={staff.id} className="grid grid-cols-7 gap-3 px-4 py-3 border-b border-white/[0.03] items-center">
-                <div className="font-medium">{staff.name}</div>
-                <div className="text-[#787a73] text-sm">{staff.email}</div>
-                <div>
-                  <span className="px-2 py-0.5 text-xs rounded bg-white/[0.05]">{staff.role}</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => (
-                    <span key={r} className="px-2 py-0.5 text-xs rounded bg-[#d8a85b]/20 text-[#d8a85b]">{r}</span>
-                  ))}
-                </div>
-                <div>
-                  <span className={`px-2 py-0.5 text-xs rounded ${
-                    staff.status === 'ACTIVE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                  }`}>
+      <div className="space-y-2">
+        {loading ? (
+          <div className="px-4 py-8 text-center text-[#777971]">Loading staff...</div>
+        ) : staffList.length === 0 ? (
+          <p className="px-4 py-8 text-center text-[#777971]">No staff yet. Invite your first team member.</p>
+        ) : (
+          staffList.map((staff) => {
+            const extraRoles = staff.roles.filter((r: string) => r !== staff.role)
+            const isOpen = openStaff === staff.id
+            return (
+              <div key={staff.id} className="overflow-hidden rounded-lg border border-white/[0.08] bg-[#181a17]">
+                <button
+                  type="button"
+                  onClick={() => setOpenStaff(isOpen ? null : staff.id)}
+                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-white/[0.04]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{staff.name}</p>
+                    <p className="mt-0.5 truncate text-xs text-[#777971]">{staff.email}</p>
+                  </div>
+                  <span className="hidden shrink-0 rounded bg-white/[0.05] px-2 py-0.5 text-[10px] text-[#a4a59e] sm:inline">
+                    {staff.role}
+                  </span>
+                  {staff.hasOpenShift && (
+                    <span className="hidden shrink-0 rounded bg-[#7cc58f]/10 px-2 py-0.5 text-[10px] text-[#7cc58f] sm:inline">
+                      {staff.shiftCount} shifts · open
+                    </span>
+                  )}
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${
+                      staff.status === 'ACTIVE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                    }`}
+                  >
                     {staff.status}
                   </span>
-                </div>
-                <div className="text-sm text-[#787a73]">{staff.shiftCount} {staff.hasOpenShift && <span className="text-green-400 ml-1">●</span>}</div>
-                <div className="flex items-center justify-end gap-2">
-                  {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => (
-                    <button
-                      key={`${staff.id}-${r}`}
-                      onClick={() => handleRevokeGrant(roleGrants.find(g => g.userId === staff.id && g.role === r)?.id)}
-                      className="p-1 text-red-400 hover:bg-red-500/10 rounded"
-                      title={`Revoke ${r}`}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+                  <ChevronDown
+                    size={16}
+                    className={`shrink-0 text-[#777971] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
 
-      <div className="staff-cards space-y-3 px-1">
-        {!loading && staffList.map((staff) => (
-          <div key={staff.id} className="border border-white/[0.08] bg-[#181a17] rounded-lg p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="font-medium truncate">{staff.name}</p>
-                <p className="text-sm text-[#787a73] truncate">{staff.email}</p>
+                {isOpen && (
+                  <div className="border-t border-white/[0.04] bg-[#141613] px-4 py-4">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+                      <StaffDetail label="Email" value={staff.email} />
+                      <StaffDetail label="Primary Role" value={staff.role} />
+                      <StaffDetail
+                        label="Shifts"
+                        value={`${staff.shiftCount}${staff.hasOpenShift ? ' · one open now' : ''}`}
+                      />
+                      <StaffDetail label="Status" value={staff.status} />
+                    </div>
+
+                    <div className="mt-4">
+                      <p className="text-[10px] uppercase tracking-[0.1em] text-[#777971]">Additional Roles</p>
+                      {extraRoles.length === 0 ? (
+                        <p className="mt-1 text-xs text-[#777971]">None</p>
+                      ) : (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {extraRoles.map((r: string) => {
+                            const grant = roleGrants.find((g) => g.userId === staff.id && g.role === r)
+                            return (
+                              <span
+                                key={`${staff.id}-${r}`}
+                                className="inline-flex items-center gap-1 rounded-md border border-[#d8a85b]/30 bg-[#d8a85b]/10 py-0.5 pl-2 pr-0.5 text-[11px] text-[#d8a85b]"
+                              >
+                                {r}
+                                {grant && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRevokeGrant(grant.id)}
+                                    title={`Revoke ${r}`}
+                                    aria-label={`Revoke ${r}`}
+                                    className="rounded p-1 text-red-400 transition hover:bg-red-500/15"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                )}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-              <span className={`px-2 py-1 text-xs rounded ${staff.status === 'ACTIVE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} shrink-0`}>
-                {staff.status}
-              </span>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="px-2 py-0.5 text-xs rounded bg-white/[0.05]">{staff.role}</span>
-              {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => (
-                <span key={r} className="px-2 py-0.5 text-xs rounded bg-[#d8a85b]/20 text-[#d8a85b]">{r}</span>
-              ))}
-            </div>
-            <div className="mt-3 flex items-center gap-4 text-sm text-[#787a73]">
-              <span>{staff.shiftCount} shifts {staff.hasOpenShift && <span className="text-green-400 ml-1">●</span>}</span>
-              <div className="flex items-center gap-1 ml-auto">
-                {staff.roles.filter((r: string) => r !== staff.role).map((r: string) => (
-                  <button
-                    key={`${staff.id}-${r}-mobile`}
-                    onClick={() => handleRevokeGrant(roleGrants.find(g => g.userId === staff.id && g.role === r)?.id)}
-                    className="p-1 text-red-400 hover:bg-red-500/10 rounded"
-                    title={`Revoke ${r}`}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        ))}
+            )
+          })
+        )}
       </div>
 
       <div className="border border-white/[0.08] bg-[#181a17] p-4">
@@ -4713,17 +4754,17 @@ export default function Page() {
       </aside>
 
       <section className="dashboard-content">
-        <header className="flex h-[76px] items-center justify-between border-b border-white/[0.07] px-4 sm:px-5 lg:px-8 dashboard-header">
-          <div className="flex items-center gap-3">
+        <header className="flex min-h-[76px] flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] px-4 py-3 sm:px-5 lg:px-8 dashboard-header">
+          <div className="flex min-w-0 items-center gap-3">
             <button
               className="text-[#92948c] lg:hidden p-2 hover:bg-white/5 rounded transition"
               onClick={() => setMobileMenuOpen(true)}
             >
               <Menu size={22} />
             </button>
-            <div>
+            <div className="min-w-0">
               <p className="text-[11px] uppercase tracking-[0.16em] text-[#73756f]">{formatDate()}</p>
-              <h1 className="mt-1 text-xl font-semibold tracking-tight">
+              <h1 className="mt-1 truncate text-xl font-semibold tracking-tight">
                 {getGreeting()}, {dashboardData.staff.name}
                 <span className="text-[#d8a85b]"> / </span>
                 <span className="text-[#96978f]">{activeNav}</span>
@@ -4732,24 +4773,24 @@ export default function Page() {
           </div>
           <div className="flex items-center gap-3 dashboard-header-actions">
             {shift ? (
-              <div className="flex items-center gap-3 rounded-md border border-[#d8a85b]/30 bg-[#d8a85b]/10 px-3 py-2 text-xs text-[#d8a85b]">
-                <span className="size-1.5 rounded-full bg-[#7cc58f] shadow-[0_0_8px_#7cc58f]" />
-                <span className="hidden sm:inline">Shift open · {formatTime(shift.startsAt)} · Float: {formatPrice(shift.openingCash)} · Cash: {formatPrice(shift.cashDrawer?.balance ?? '0')}</span>
-                <span className="sm:hidden">Open · {formatPrice(shift.openingCash)}</span>
-                <button onClick={() => setShowShiftModal(true)} className="ml-2 px-2 py-1 rounded text-[10px] bg-[#d8a85b]/20 hover:bg-[#d8a85b]/30">
+              <div className="flex min-w-0 max-w-full items-center gap-3 rounded-md border border-[#d8a85b]/30 bg-[#d8a85b]/10 px-3 py-2 text-xs text-[#d8a85b]">
+                <span className="size-1.5 shrink-0 rounded-full bg-[#7cc58f] shadow-[0_0_8px_#7cc58f]" />
+                <span className="hidden truncate sm:inline">Shift open · {formatTime(shift.startsAt)} · Float: {formatPrice(shift.openingCash)} · Cash: {formatPrice(shift.cashDrawer?.balance ?? '0')}</span>
+                <span className="truncate sm:hidden">Open · {formatPrice(shift.openingCash)}</span>
+                <button onClick={() => setShowShiftModal(true)} className="ml-2 shrink-0 whitespace-nowrap rounded px-2 py-1 text-[10px] bg-[#d8a85b]/20 hover:bg-[#d8a85b]/30">
                   Manage
                 </button>
               </div>
             ) : (
               <button
                 onClick={() => setShowShiftModal(true)}
-                className="flex items-center gap-2 rounded-md border border-[#d8a85b]/30 bg-[#d8a85b]/10 px-3 py-2 text-xs text-[#d8a85b] hover:bg-[#d8a85b]/20"
+                className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md border border-[#d8a85b]/30 bg-[#d8a85b]/10 px-3 py-2 text-xs text-[#d8a85b] hover:bg-[#d8a85b]/20"
               >
                 <span className="size-1.5 rounded-full bg-[#d8a85b]" />
                 Open Shift
               </button>
             )}
-            <button className="relative rounded-md border border-white/[0.08] p-2 text-[#a5a69f] hover:bg-white/[0.05]">
+            <button className="relative ml-auto shrink-0 rounded-md border border-white/[0.08] p-2 text-[#a5a69f] hover:bg-white/[0.05]">
               <Bell size={17} />
               {dashboardData.lowStock.length > 0 && (
                 <span className="absolute right-1 top-1 size-1.5 rounded-full bg-[#dc8c72]" />

@@ -19,10 +19,10 @@ function getPath(request: NextRequest): string {
 function formatProduct(product: any) {
   return {
     ...product,
-    price: product.price.toString(),
-    costPrice: product.costPrice.toString(),
-    stock: product.stock.toString(),
-    reorderAt: product.reorderAt.toString(),
+    price: product.price?.toString() ?? '0',
+    costPrice: product.costPrice != null ? product.costPrice.toString() : null,
+    stock: product.stock?.toString() ?? '0',
+    reorderAt: product.reorderAt?.toString() ?? '0',
     category: { name: product.category?.name },
   }
 }

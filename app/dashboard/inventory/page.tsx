@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Search, Coffee, Wine, Trash2, Edit2, Package, AlertTriangle, X } from 'lucide-react'
+import { Plus, Search, Coffee, Wine, Trash2, Edit2, Package, AlertTriangle, X, ChevronDown } from 'lucide-react'
 import { formatPrice } from '@/lib/utils'
 
 type Product = {
@@ -18,6 +18,15 @@ type Product = {
 
 type Category = { id: string; name: string }
 
+function ProductDetail({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] uppercase tracking-[0.1em] text-[#777971]">{label}</p>
+      <p className={`mt-0.5 truncate text-xs ${mono ? 'font-mono' : ''}`} title={value}>{value}</p>
+    </div>
+  )
+}
+
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -25,6 +34,7 @@ export default function InventoryPage() {
   const [showAddProduct, setShowAddProduct] = useState(false)
   const [showAddCategory, setShowAddCategory] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [openProduct, setOpenProduct] = useState<string | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('All')
@@ -110,15 +120,11 @@ export default function InventoryPage() {
 
   const handleUpdateProduct = async (formData: FormData) => {
     if (!editingProduct) return
-    const productData = {
-      name: formData.get('name') as string,
-      sku: formData.get('sku') as string,
-      categoryId: formData.get('categoryId') as string,
-      price: formData.get('price') as string,
-      costPrice: formData.get('costPrice') as string,
-      stock: formData.get('stock') as string,
-      reorderAt: formData.get('reorderAt') as string,
-      status: formData.get('status') as 'ACTIVE' | 'INACTIVE',
+    const fields = ['name', 'sku', 'categoryId', 'price', 'costPrice', 'stock', 'reorderAt', 'status']
+    const productData: Record<string, string> = {}
+    for (const key of fields) {
+      const value = formData.get(key)
+      if (typeof value === 'string' && value !== '') productData[key] = value
     }
     setSaving(editingProduct.id)
     try {
@@ -129,10 +135,10 @@ export default function InventoryPage() {
       })
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to update product')
+        throw new Error(error.message || 'Failed to update product')
       }
       const updated = await response.json()
-      setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? updated : p)))
+      setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? updated.data.product : p)))
       setEditingProduct(null)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update product')
@@ -257,105 +263,140 @@ export default function InventoryPage() {
       </div>
 
       <div className="border border-white/[0.08] bg-[#181a17] overflow-hidden">
-        <div className="grid grid-cols-8 gap-3 px-4 py-3 border-b border-white/[0.06] text-[10px] font-medium uppercase tracking-[0.1em] text-[#787a73]">
-          <div>Product</div>
-          <div>SKU</div>
-          <div>Category</div>
-          <div className="text-right">Stock</div>
-          <div className="text-right">Reorder</div>
-          <div className="text-right">Status</div>
-          <div className="text-right">Price</div>
-          <div></div>
-        </div>
         {filteredProducts.length === 0 ? (
           <p className="px-4 py-8 text-center text-[#777971]">No products yet. Add your first product.</p>
         ) : (
-          filteredProducts.map((product, i) => {
+          filteredProducts.map((product) => {
             const status = getStockStatus(product)
+            const isOpen = openProduct === product.id
             const isEditing = editingProduct?.id === product.id
             return (
-              <form
-                key={product.id}
-                onSubmit={(e) => { if (isEditing) { e.preventDefault(); handleUpdateProduct(new FormData(e.currentTarget)) } }}
-                className="grid grid-cols-8 gap-3 px-4 py-3 border-t border-white/[0.04] items-center"
-                data-product-id={product.id}
-              >
-                <div className="min-w-0">
-                  <p className="text-xs font-medium truncate">{product.name}</p>
-                  {isEditing && (
-                    <input
-                      name="name"
-                      type="text"
-                      defaultValue={product.name}
-                      className="w-full h-8 rounded-md border border-white/[0.1] bg-[#20221e] px-2 text-xs outline-none focus:border-[#d8a85b]/60"
-                    />
-                  )}
-                </div>
-                <p className="text-xs text-[#777971] font-mono">{product.sku ?? '\u2014'}</p>
-                <p className="text-xs text-[#777971]">{product.category.name}</p>
-                <div className="text-right">
-                  {isEditing ? (
-                    <input
-                      name="stock"
-                      type="number"
-                      step="0.001"
-                      defaultValue={product.stock}
-                      className="w-20 h-8 rounded-md border border-white/[0.1] bg-[#20221e] px-2 text-xs text-right outline-none focus:border-[#d8a85b]/60"
-                    />
-                  ) : (
-                    <p className="text-xs font-medium">{parseFloat(product.stock).toFixed(3)}</p>
-                  )}
-                </div>
-                <p className="text-right text-xs text-[#777971]">{parseFloat(product.reorderAt).toFixed(3)}</p>
-                <span className={`text-right text-[9px] font-semibold px-2 py-0.5 rounded ${status.color} ${status.bg}`}>
-                  {status.label}
-                </span>
-                <p className="text-right text-xs text-[#777971]">{formatPrice(product.price)}</p>
-                <div className="flex items-center gap-1">
-                  {isEditing ? (
-                    <>
-                      <button
-                        type="submit"
-                        disabled={saving === product.id}
-                        className="text-[9px] text-[#7cc58f] hover:underline"
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingProduct(null)}
-                        className="text-[9px] text-[#d8a85b] hover:underline"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setEditingProduct(product)}
-                        className="text-[9px] text-[#777971] hover:text-white"
-                      >
-                        <Edit2 size={12} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAdjustStock(product.id, 1, 'Restock')}
-                        className="text-[9px] text-[#d8a85b] hover:underline"
-                      >
-                        +Stock
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteProduct(product.id, product.name)}
-                        className="text-[9px] text-red-400 hover:underline"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </form>
+              <div key={product.id} className="border-b border-white/[0.04] last:border-b-0" data-product-id={product.id}>
+                <button
+                  type="button"
+                  onClick={() => setOpenProduct(isOpen ? null : product.id)}
+                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-white/[0.04]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{product.name}</p>
+                    <p className="mt-0.5 truncate text-xs text-[#777971]">
+                      {product.category.name}
+                      {product.sku ? ` \u00b7 ${product.sku}` : ''}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${status.color} ${status.bg}`}>
+                    {status.label}
+                  </span>
+                  <div className="shrink-0 text-right">
+                    <p className="text-[9px] uppercase tracking-[0.1em] text-[#777971]">Stock</p>
+                    <p className="tabular-nums text-sm font-medium">{parseFloat(product.stock).toFixed(3)}</p>
+                  </div>
+                  <ChevronDown
+                    size={16}
+                    className={`shrink-0 text-[#777971] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {isOpen && (
+                  <div className="border-t border-white/[0.04] bg-[#141613] px-4 py-4">
+                    <form
+                      onSubmit={(e) => {
+                        if (isEditing) {
+                          e.preventDefault()
+                          handleUpdateProduct(new FormData(e.currentTarget))
+                        }
+                      }}
+                    >
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+                        {isEditing && (
+                          <>
+                            <label className="block">
+                              <span className="mb-1 block text-[10px] uppercase tracking-[0.1em] text-[#777971]">Name</span>
+                              <input
+                                name="name"
+                                type="text"
+                                defaultValue={product.name}
+                                className="h-9 w-full rounded-md border border-white/[0.1] bg-[#20221e] px-2 text-xs outline-none focus:border-[#d8a85b]/60"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-[10px] uppercase tracking-[0.1em] text-[#777971]">Stock</span>
+                              <input
+                                name="stock"
+                                type="number"
+                                step="0.001"
+                                defaultValue={product.stock}
+                                className="h-9 w-full rounded-md border border-white/[0.1] bg-[#20221e] px-2 text-xs outline-none focus:border-[#d8a85b]/60"
+                              />
+                            </label>
+                          </>
+                        )}
+                        <ProductDetail label="SKU" value={product.sku ?? '\u2014'} mono />
+                        <ProductDetail label="Category" value={product.category.name} />
+                        <ProductDetail label="Stock" value={parseFloat(product.stock).toFixed(3)} />
+                        <ProductDetail label="Reorder Point" value={parseFloat(product.reorderAt).toFixed(3)} />
+                        <ProductDetail label="Price" value={formatPrice(product.price)} />
+                        <ProductDetail label="Cost" value={product.costPrice ? formatPrice(product.costPrice) : '\u2014'} />
+                        <ProductDetail label="Availability" value={product.status === 'ACTIVE' ? 'Active' : 'Inactive'} />
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        {isEditing ? (
+                          <>
+                            <button
+                              type="submit"
+                              disabled={saving === product.id}
+                              className="rounded-md bg-[#7cc58f] px-3 py-1.5 text-xs font-semibold text-[#1b1914] disabled:opacity-50"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingProduct(null)}
+                              className="rounded-md border border-white/[0.12] px-3 py-1.5 text-xs text-[#d0d0c9] hover:bg-white/[0.06]"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setEditingProduct(product)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-[#d8a85b]/40 bg-[#d8a85b]/10 px-3 py-1.5 text-xs font-semibold text-[#d8a85b] hover:bg-[#d8a85b]/20"
+                            >
+                              <Edit2 size={12} /> Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAdjustStock(product.id, 1, 'Restock')}
+                              disabled={saving === product.id}
+                              className="rounded-md border border-[#7cc58f]/40 bg-[#7cc58f]/10 px-3 py-1.5 text-xs font-semibold text-[#7cc58f] hover:bg-[#7cc58f]/20 disabled:opacity-50"
+                            >
+                              +1 Stock
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAdjustStock(product.id, -1, 'Manual adjustment')}
+                              disabled={saving === product.id || parseFloat(product.stock) <= 0}
+                              className="rounded-md border border-[#dc8c72]/40 bg-[#dc8c72]/10 px-3 py-1.5 text-xs font-semibold text-[#dc8c72] hover:bg-[#dc8c72]/20 disabled:opacity-50"
+                            >
+                              -1 Stock
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteProduct(product.id, product.name)}
+                              className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/20"
+                            >
+                              <Trash2 size={12} /> Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </div>
             )
           })
         )}

@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { Activity, ToggleRight, ToggleLeft, Trash2 } from 'lucide-react'
 import { formatTime } from '@/lib/utils'
+import { AdminBackLink } from '@/components/admin-back-link'
+import { AdminTabs } from '@/components/admin-tabs'
 
 type FeatureFlag = { key: string; enabled: boolean; updatedAt: string }
 
@@ -87,6 +89,8 @@ export default function FeatureFlagsPage() {
 
   return (
     <div className="min-h-screen bg-[#111210] text-[#f3f0e9] p-4 sm:p-6 lg:p-8 space-y-6">
+      <AdminBackLink />
+      <AdminTabs />
       <div>
         <h1 className="text-2xl font-semibold flex items-center gap-2">
           <Activity size={22} className="text-[#d8a85b]" />
