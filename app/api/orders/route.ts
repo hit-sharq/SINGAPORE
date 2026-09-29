@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
+import { revalidateTag } from 'next/cache'
 
 const orderSchema = z.object({
   tableId: z.string().optional(),
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
       return created
     })
 
+    revalidateTag('dashboard', 'max')
     return createdResponse({ order })
   } catch (error) {
     if (error instanceof Error && error.message === 'FORBIDDEN') {

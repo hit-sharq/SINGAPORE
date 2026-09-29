@@ -31,7 +31,6 @@ const roleLabels: Record<string, string> = {
 }
 
 type StaffInfo = { name: string; role: string; roles: string[] }
-
 const workspaceNav = [
   { label: 'Overview', icon: LayoutDashboard, href: '/dashboard', roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER', 'INVENTORY_MANAGER'] },
   { label: 'Point of Sale', icon: ShoppingBag, href: '/dashboard/pos', roles: ['ADMIN', 'MANAGER', 'CASHIER', 'BARTENDER', 'WAITER'] },
@@ -54,17 +53,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [staff, setStaff] = useState<StaffInfo | null>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  const isDashboardRoot = pathname === '/dashboard' || pathname === '/dashboard/'
+
   useEffect(() => {
-    fetch('/api/dashboard')
-      .then((res) => res.ok ? res.json() : null)
-      .then((data) => setStaff(data?.data?.staff ?? null))
+    // The dashboard root renders its own shell and already loads the full
+    // dashboard payload, so don't pay for the sidebar profile fetch twice.
+    if (isDashboardRoot) return
+    let cancelled = false
+    fetch('/api/me')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) setStaff(data?.data?.staff ?? null)
+      })
       .catch(() => {})
-  }, [])
+    return () => {
+      cancelled = true
+    }
+  }, [isDashboardRoot])
 
   const userRoles = staff?.roles ?? []
   const visibleNav = workspaceNav.filter((item) => item.roles.some((r) => userRoles.includes(r)))
-
-  const isDashboardRoot = pathname === '/dashboard' || pathname === '/dashboard/'
 
   if (isDashboardRoot) {
     return <>{children}</>

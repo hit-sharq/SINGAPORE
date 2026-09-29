@@ -4697,7 +4697,7 @@ export default function Page() {
 
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-[228px] flex-col border-r border-white/[0.07] bg-[#171815] lg:flex">
-        <Link href="/" className="flex h-[76px] items-center gap-3 border-b border-white/[0.07] px-6">
+        <Link href="/dashboard" className="flex h-[76px] items-center gap-3 border-b border-white/[0.07] px-6">
           <div className="flex size-9 items-center justify-center rounded-[10px] bg-[#d8a85b] text-[#171815]">
             <Spade size={19} fill="currentColor" />
           </div>

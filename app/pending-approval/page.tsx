@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { ShieldCheck } from 'lucide-react'
 
 export default function PendingApprovalPage() {
@@ -21,19 +20,13 @@ export default function PendingApprovalPage() {
           <p>If you haven&apos;t received an invitation, you may request one from your administrator.</p>
         </div>
 
-        <div className="mt-8 flex flex-col gap-3">
-          <Link
-            href="/"
-            className="rounded-full bg-primary px-6 py-3 font-medium text-primary-foreground transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/25"
-          >
-            Return to Home
-          </Link>
-          <Link
+        <div className="mt-8">
+          <a
             href="/sign-in?signOut=true"
-            className="rounded-full border border-border px-6 py-3 font-medium transition-all hover:bg-secondary hover:border-transparent"
+            className="block w-full rounded-full border border-border px-6 py-3 font-medium transition-all hover:bg-secondary hover:border-transparent"
           >
-            Sign Out
-          </Link>
+            Sign out
+          </a>
         </div>
       </div>
     </main>

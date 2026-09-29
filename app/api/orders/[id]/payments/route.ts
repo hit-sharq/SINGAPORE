@@ -10,6 +10,7 @@ import {
 import { Role, PaymentMethod, PaymentStatus, OrderStatus } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
+import { revalidateTag } from 'next/cache'
 
 const paymentSchema = z.object({
   method: z.nativeEnum(PaymentMethod),
@@ -223,6 +224,7 @@ export async function POST(
       }
     }
 
+    revalidateTag('dashboard', 'max')
     return createdResponse(formatPayment(payment))
   } catch (error) {
     if (error instanceof Error && error.message === 'FORBIDDEN') {

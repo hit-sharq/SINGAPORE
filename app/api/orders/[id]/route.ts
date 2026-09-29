@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { Role, OrderStatus } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
+import { revalidateTag } from 'next/cache'
 
 const statusSchema = z.object({
   status: z.nativeEnum(OrderStatus),
@@ -185,6 +186,7 @@ export async function PATCH(
       return updatedOrder
     })
 
+    revalidateTag('dashboard', 'max')
     return successResponse({ order: formatOrder(updated) })
   } catch (error) {
     if (error instanceof Error && error.message === 'FORBIDDEN') {

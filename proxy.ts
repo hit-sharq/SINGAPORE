@@ -1,6 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getStaffStatus } from '@/lib/authorization'
 
 const isPublicRoute = createRouteMatcher([
   '/',
@@ -12,6 +12,13 @@ const isPublicRoute = createRouteMatcher([
 ])
 
 export default clerkMiddleware(async (auth, request) => {
+  // The root path is not a landing page: send people straight to the auth
+  // system, or to the workspace if they already have a session.
+  if (request.nextUrl.pathname === '/') {
+    const { userId } = await auth()
+    return NextResponse.redirect(new URL(userId ? '/dashboard' : '/sign-in', request.url))
+  }
+
   if (!isPublicRoute(request)) {
     const { userId } = await auth()
     
@@ -23,10 +30,9 @@ export default clerkMiddleware(async (auth, request) => {
       return NextResponse.redirect(new URL('/sign-in', request.url))
     }
 
-    // Check if user has an active staff profile
-    const staff = await prisma.staffProfile.findUnique({
-      where: { clerkUserId: userId },
-    })
+    // Check if user has an active staff profile (cached for 30s so this does
+    // not hit the database on every single request)
+    const staff = await getStaffStatus(userId)
 
     if (!staff || staff.status !== 'ACTIVE') {
       const isApiRoute = request.nextUrl.pathname.startsWith('/api/')

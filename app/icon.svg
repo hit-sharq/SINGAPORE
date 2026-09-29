@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Singapore Club">
+  <defs>
+    <linearGradient id="sc-gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8c98c" />
+      <stop offset="1" stop-color="#d5a24f" />
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="url(#sc-gold)" />
+  <g transform="translate(3.38 2.87) scale(1.05)" fill="#171815" stroke="#171815" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 18v4" fill="none" />
+    <path d="M2 14.499a5.5 5.5 0 0 0 9.591 3.675.6.6 0 0 1 .818.001A5.5 5.5 0 0 0 22 14.5c0-2.29-1.5-4-3-5.5l-5.492-5.312a2 2 0 0 0-3-.02L5 8.999c-1.5 1.5-3 3.2-3 5.5" />
+  </g>
+</svg>

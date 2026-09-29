@@ -3,14 +3,14 @@ import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role, OrderStatus, PaymentStatus } from '@prisma/client'
 import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
+import { unstable_cache } from 'next/cache'
 
 function getPath(request: NextRequest): string {
   return request.nextUrl.pathname
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const staff = await requireRole(Object.values(Role))
+const getCachedDashboard = unstable_cache(
+  async (staffId: string) => {
     const start = new Date()
     start.setHours(0, 0, 0, 0)
     const yesterday = new Date(start)
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
         take: 10,
       }),
       prisma.order.findMany({
-        where: { createdById: staff.id },
+        where: { createdById: staffId },
         include: {
           items: { include: { product: { select: { name: true } } } },
           payments: { select: { method: true, status: true } },
@@ -113,13 +113,7 @@ export async function GET(request: NextRequest) {
       ` as unknown as { category: string; amount: string }[],
     ])
 
-    return successResponse({
-      staff: {
-        name: staff.name,
-        role: staff.role,
-        email: staff.email,
-        roles: staff.roles,
-      },
+    return {
       revenue: todayOrders._sum.total?.toString() ?? '0',
       orderCount: todayOrders._count,
       yesterdayRevenue: yesterdayOrders._sum.total?.toString() ?? '0',
@@ -170,6 +164,24 @@ export async function GET(request: NextRequest) {
             createdAt: lastPayment.createdAt.toISOString(),
           }
         : null,
+    }
+  },
+  ['dashboard'],
+  { revalidate: 10, tags: ['dashboard'] }
+)
+
+export async function GET(request: NextRequest) {
+  try {
+    const staff = await requireRole(Object.values(Role))
+    const payload = await getCachedDashboard(staff.id)
+    return successResponse({
+      staff: {
+        name: staff.name,
+        role: staff.role,
+        email: staff.email,
+        roles: staff.roles,
+      },
+      ...payload,
     })
   } catch (error) {
     if (error instanceof Error && error.message === 'FORBIDDEN') {

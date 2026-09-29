@@ -4,6 +4,7 @@ import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
 import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
+import { revalidateTag } from 'next/cache'
 
 const adjustSchema = z.object({
   productId: z.string().cuid('Invalid product ID'),
@@ -80,6 +81,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    revalidateTag('dashboard', 'max')
     return successResponse({
       product: formatProduct(updated),
       movement,
