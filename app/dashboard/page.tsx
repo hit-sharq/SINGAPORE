@@ -60,6 +60,8 @@ import {
 import { PaymentQrCode } from '@/components/payment-qr'
 import { usePaymentWaiter, type WaitForPaymentOutcome } from '@/hooks/use-payment-waiter'
 import { normaliseKenyanPhone, formatKenyanPhone } from '@/lib/phone'
+import { NoticeList, notifyError, notifyErrorText, notifySuccess } from '@/components/notices'
+import { errorFromResponse } from '@/lib/error-text'
 
 type Category = { name: string }
 
@@ -4064,11 +4066,14 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
       })
       const data = await response.json()
       if (!response.ok) {
-        // The API returns { code, message, details }. For an invalid number,
-        // details.field is 'payerPhone' and the message explains what is wrong,
-        // so the waiter sees why rather than a generic failure.
-        const message = data?.message || data?.error || 'Payment failed'
-        throw new Error(message)
+        // Title, message and hint are written for the waiter. The provider's
+        // own wording goes to the console, because "invalid_consumer_key" is
+        // for whoever fixes it, not for the table.
+        if (data?.detail) console.error('[payment]', data.code, data.detail)
+        const text = data?.hint ? `${data.message} ${data.hint}` : data?.message
+        notifyError(data?.title ?? 'Payment problem', text ?? 'The payment did not go through.')
+        setProcessing(null)
+        return
       }
 
       if (method === 'PESAPAL') {
@@ -4091,8 +4096,11 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
       onRefresh()
       setPaymentAmount('')
       setProcessing(null)
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Payment failed')
+    } catch {
+      notifyError(
+        'Cannot reach the payment provider',
+        'No money has left the customer. Try cash, or try again in a moment.'
+      )
       setProcessing(null)
     }
   }
@@ -4782,15 +4790,18 @@ export default function Page() {
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || 'Failed to create order')
+        // The API sends plain-English copy plus the technical reason. Staff see
+        // the first; the second goes to the console for whoever is fixing it.
+        const text = await errorFromResponse(response, 'CONFLICT')
+        notifyErrorText(text)
+        return
       }
 
       setCart([])
       setShowSale(false)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Checkout failed'
-      alert(message)
+      notifySuccess('Order sent to the table')
+    } catch {
+      notifyErrorText('Could not reach the club server. Check the WiFi and try again.')
     }
   }
 
@@ -5063,6 +5074,9 @@ export default function Page() {
           )}
           {renderView()}
         </div>
+        {/* Staff-facing notifications, so an error never blocks the till
+            with a browser alert. */}
+        <NoticeList />
         <OrderDetailModal order={selectedOrder} onClose={closeOrderDetail} onRefresh={refreshDashboard} />
         <ShiftModal
           shift={shift}

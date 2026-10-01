@@ -142,16 +142,14 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // PesaPal retries unless it receives these parameters echoed back.
-    return new NextResponse(
-      `pesapal_notification_type=CHANGE` +
-        `&pesapal_transaction_tracking_id=${encodeURIComponent(transaction.pesapalOrderId ?? '')}` +
-        `&pesapal_merchant_reference=${encodeURIComponent(transaction.merchantRef)}`,
-      {
-        status: 200,
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      },
-    )
+    // PesaPal retries unless it receives a JSON acknowledgement with status
+    // 200. The documented shape is a JSON body, not a query string.
+    return NextResponse.json({
+      orderNotificationType: 'IPNCHANGE',
+      orderTrackingId: transaction.pesapalOrderId,
+      orderMerchantReference: transaction.merchantRef,
+      status: 200,
+    })
   } catch (error) {
     console.error('PesaPal IPN error:', error)
     // A 500 makes PesaPal retry, which is what we want for a transient failure.

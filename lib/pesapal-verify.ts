@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
-import { pesapalGetAuthToken, pesapalGetTransactionStatus, PesapalError } from '@/lib/pesapal'
+import { pesapalGetTransactionStatus, PesapalError } from '@/lib/pesapal'
+import { getPesapalToken } from '@/lib/pesapal-cache'
 import { resolveStoredSecret } from '@/lib/security'
 import { PaymentStatus } from '@prisma/client'
 
@@ -89,8 +90,7 @@ export async function verifyTransactionWithPesapal(
 
   let token: string
   try {
-    const auth = await pesapalGetAuthToken(credentials.consumerKey, credentials.consumerSecret)
-    token = auth.token
+    token = await getPesapalToken(credentials.consumerKey, credentials.consumerSecret)
   } catch (error) {
     const message = error instanceof PesapalError ? error.message : 'PesaPal auth failed'
     return { ok: false, reason: message }
@@ -137,7 +137,7 @@ export async function verifyTransactionWithPesapal(
     status,
     amount,
     currency: transaction.currency,
-    merchantRef: transaction.merchant_ref,
+    merchantRef: transaction.merchant_reference,
   }
 }
 

@@ -2,14 +2,18 @@ import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
-import {
-  pesapalGetAuthToken,
-  pesapalSubmitOrder,
-  PesapalError,
-} from '@/lib/pesapal'
+import { pesapalSubmitOrder, PesapalError } from '@/lib/pesapal'
+import { getPesapalToken, getNotificationId } from '@/lib/pesapal-cache'
 import { Role, PaymentMethod, PaymentStatus, OrderStatus } from '@prisma/client'
 import { Prisma } from '@prisma/client'
-import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
+import {
+  errorResponse,
+  createdResponse,
+  successResponse,
+  ErrorCodes,
+  staffErrorResponse,
+  unexpectedErrorResponse,
+} from '@/lib/api/response'
 import { getPesapalCredentials } from '@/lib/pesapal-verify'
 import { releaseTableIfFree } from '@/lib/tables'
 import { normaliseKenyanPhone } from '@/lib/phone'
@@ -95,13 +99,7 @@ export async function POST(
       }
       normalisedPhone = normaliseKenyanPhone(payerPhone)
       if (!normalisedPhone) {
-        return errorResponse(
-          ErrorCodes.VALIDATION_ERROR,
-          'That does not look like a Kenyan mobile number',
-          400,
-          { field: 'payerPhone' },
-          getPath(request)
-        )
+        return staffErrorResponse('INVALID_PHONE', 400, `rejected "${payerPhone}"`, getPath(request))
       }
     }
 
@@ -249,25 +247,34 @@ export async function POST(
           })
         }
 
-        const result = await pesapalSubmitOrder({
-          consumerKey,
-          consumerSecret,
-          merchantRef,
-          amount: Number(payment.amount),
-          currency: payment.currency,
-          description: `Order #${order.number}`,
-          callbackUrl,
-          notificationUrl,
-          redirectUrl: callbackUrl,
-          payerPhone: normalisedPhone ?? undefined,
-        })
+        // API 3.0 authenticates with a short-lived bearer token rather than
+        // sending the key and secret on every call, and requires the IPN URL to
+        // be registered up front so the order can carry a notification_id.
+        const token = await getPesapalToken(consumerKey, consumerSecret)
+        const notificationId = await getNotificationId(token, notificationUrl)
+
+        const result = await pesapalSubmitOrder(
+          {
+            merchantRef,
+            amount: Number(payment.amount),
+            currency: payment.currency,
+            description: `Order #${order.number}`,
+            callbackUrl,
+            notificationId,
+            redirectUrl: callbackUrl,
+            payerPhone: normalisedPhone ?? undefined,
+          },
+          token,
+        )
+
+        const trackingId = result.order_tracking_id
 
         await prisma.pesapalTransaction.create({
           data: {
             orderId: id,
             merchantRef,
-            pesapalOrderId: result.pesapal_transaction_id,
-            status: result.status === 'Completed' ? PaymentStatus.COMPLETED : PaymentStatus.PENDING,
+            pesapalOrderId: trackingId,
+            status: PaymentStatus.PENDING,
             amount: payment.amount,
             currency: payment.currency,
             callbackPayload: result as any,
@@ -278,8 +285,8 @@ export async function POST(
           where: { id: payment.id },
           data: {
             merchantRef,
-            pesapalOrderId: result.pesapal_transaction_id,
-            confirmationRef: result.pesapal_transaction_id,
+            pesapalOrderId: trackingId,
+            confirmationRef: trackingId,
             rawResponse: result as any,
             // Recorded so a mismatched payment can be traced to a number at
             // closing time without asking Pesapal.
@@ -290,11 +297,13 @@ export async function POST(
         return successResponse({
           ...formatPayment(payment),
           merchantRef,
-          pesapalOrderId: result.pesapal_transaction_id,
+          pesapalOrderId: trackingId,
           redirectUrl: result.redirect_url,
         })
       } catch (err) {
         if (err instanceof PesapalError) {
+          // The payment never reached the customer, so record it as failed
+          // rather than leaving a PENDING row nobody can explain.
           await prisma.payment.update({
             where: { id: payment.id },
             data: {
@@ -309,13 +318,12 @@ export async function POST(
               toStatus: PaymentStatus.FAILED,
             },
           })
-          return errorResponse(
-            ErrorCodes.SERVICE_UNAVAILABLE,
-            err.message,
-            502,
-            { payment: formatPayment(payment), error: err.message },
-            getPath(request)
-          )
+
+          // Staff get a sentence they can act on. The provider's own words go
+          // to the log, because "invalid_consumer_key_or_secret_provided" is
+          // for whoever is fixing it, not for the waiter at the table.
+          console.error(`PesaPal order submission failed: ${err.message}`)
+          return staffErrorResponse(err.staffCode, 502, err.message, getPath(request))
         }
         throw err
       }
@@ -331,7 +339,7 @@ export async function POST(
       return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid payment data', 400, error.issues, getPath(request))
     }
     console.error('POST /api/orders/[id]/payments error:', error)
-    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to process payment', 500, undefined, getPath(request))
+    return unexpectedErrorResponse(error, 500, getPath(request))
   }
 }
 

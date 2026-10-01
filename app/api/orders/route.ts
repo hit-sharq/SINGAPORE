@@ -4,7 +4,14 @@ import { requireRole } from '@/lib/authorization'
 import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
 import { Prisma } from '@prisma/client'
-import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
+import {
+  errorResponse,
+  createdResponse,
+  successResponse,
+  ErrorCodes,
+  staffErrorResponse,
+  unexpectedErrorResponse,
+} from '@/lib/api/response'
 import { revalidateTag } from 'next/cache'
 import { markTableOccupied } from '@/lib/tables'
 
@@ -36,7 +43,7 @@ export async function GET(request: NextRequest) {
       return errorResponse(ErrorCodes.FORBIDDEN, 'You do not have permission to view orders', 403, undefined, getPath(request))
     }
     console.error('GET /api/orders error:', error)
-    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Unable to load orders', 500, undefined, getPath(request))
+    return unexpectedErrorResponse(error, 500, getPath(request), 'DATABASE_UNAVAILABLE')
   }
 }
 
@@ -83,13 +90,10 @@ export async function POST(request: NextRequest) {
           'POST /api/orders: products not found or inactive',
           missing.map((item) => item.productId)
         )
-        return errorResponse(
-          ErrorCodes.VALIDATION_ERROR,
-          missing.length === 1
-            ? 'One item is no longer available. Remove it from the cart and try again.'
-            : `${missing.length} items are no longer available. Remove them from the cart and try again.`,
+        return staffErrorResponse(
+          'PRODUCT_UNAVAILABLE',
           400,
-          { productIds: missing.map((item) => item.productId) },
+          `unavailable product ids: ${missing.map((item) => item.productId).join(', ')}`,
           getPath(request)
         )
       }
@@ -130,9 +134,9 @@ export async function POST(request: NextRequest) {
       return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid order data', 400, error.issues, getPath(request))
     }
     if (error instanceof Error && error.message === 'INSUFFICIENT_STOCK') {
-      return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Insufficient stock for one or more items', 400, undefined, getPath(request))
+      return staffErrorResponse('INSUFFICIENT_STOCK', 400, 'a product had less stock than the order required', getPath(request))
     }
     console.error('POST /api/orders error:', error)
-    return errorResponse(ErrorCodes.INTERNAL_ERROR, 'Failed to create order', 500, undefined, getPath(request))
+    return unexpectedErrorResponse(error, 500, getPath(request))
   }
 }
