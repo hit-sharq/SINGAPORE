@@ -17,9 +17,10 @@ const getCachedDashboard = unstable_cache(
     yesterday.setDate(yesterday.getDate() - 1)
 
     const [
-      todayOrders,
+      paidOrders,
       yesterdayOrders,
-      activeTabs,
+      openTabs,
+      openTabValue,
       tables,
       lowStock,
       recentOrders,
@@ -27,6 +28,9 @@ const getCachedDashboard = unstable_cache(
       hourlyRevenue,
       lastPayment,
     ] = await Promise.all([
+      // Revenue counts orders that have been PAID. An OPEN order is work in
+      // progress, not money: a customer can order six plates and walk out, and
+      // that must not appear as revenue.
       prisma.order.aggregate({
         where: { createdAt: { gte: start }, status: 'PAID' },
         _sum: { total: true },
@@ -37,7 +41,13 @@ const getCachedDashboard = unstable_cache(
         _sum: { total: true },
         _count: true,
       }),
-      prisma.order.count({ where: { status: 'OPEN' } }),
+      // Orders opened today and still running, shown separately from revenue so
+      // the manager can see the value on the floor right now.
+      prisma.order.count({ where: { createdAt: { gte: start }, status: 'OPEN' } }),
+      prisma.order.aggregate({
+        where: { createdAt: { gte: start }, status: 'OPEN' },
+        _sum: { total: true },
+      }),
       prisma.venueTable.findMany({
         orderBy: { name: 'asc' },
         select: {
@@ -97,28 +107,65 @@ const getCachedDashboard = unstable_cache(
     ])
 
     const [outstanding, revenueByCategory] = await Promise.all([
-      prisma.order.aggregate({
-        where: { status: 'OPEN' },
-        _sum: { total: true },
-      }),
-      prisma.$queryRaw`
-        SELECT c.name as category, COALESCE(SUM(oi.subtotal)::text, '0') as amount
+      /**
+       * Outstanding is what customers still owe, so it has to net off payments
+       * that have already been taken.
+       *
+       * The previous version summed the full total of every OPEN order, which
+       * double-counted part-paid tabs: a 10,000 order with 6,000 already paid
+       * in cash showed as 10,000 outstanding instead of 4,000. At closing that
+       * is the difference between what is owed and what is in the drawer.
+       */
+      prisma.$queryRaw<{ outstanding: string | null }[]>`
+        SELECT COALESCE(SUM(greatest(o.total - COALESCE(paid.paid, 0), 0))::text, '0') as outstanding
+        FROM "Order" o
+        LEFT JOIN (
+          SELECT "orderId", SUM(amount) as paid
+          FROM "Payment"
+          WHERE status = 'COMPLETED'
+          GROUP BY "orderId"
+        ) paid ON paid."orderId" = o.id
+        WHERE o.status = 'OPEN'
+      `,
+      /**
+       * Category split for paid orders, matched to how the till groups them.
+       *
+       * "Bar" is a bucket rather than a seeded category — the schema has Beer,
+       * Wine, Spirits, Cocktails and Soft Drinks — so it is summed explicitly
+       * rather than left to a subtraction that would silently absorb anything
+       * unrecognised.
+       */
+      prisma.$queryRaw<{ category: string; amount: string }[]>`
+        SELECT
+          CASE
+            WHEN lower(c.name) = 'food' THEN 'Food'
+            WHEN lower(c.name) = 'pool' THEN 'Pool'
+            ELSE 'Bar'
+          END as category,
+          COALESCE(SUM(oi.subtotal)::text, '0') as amount
         FROM "OrderItem" oi
         JOIN "Product" p ON oi."productId" = p.id
         JOIN "Category" c ON p."categoryId" = c.id
         JOIN "Order" o ON oi."orderId" = o.id
         WHERE o."createdAt" >= ${start} AND o.status = 'PAID'
-        GROUP BY c.name
+        GROUP BY 1
         ORDER BY amount DESC
-      ` as unknown as { category: string; amount: string }[],
+      `,
     ])
 
+    const outstandingValue = outstanding[0]?.outstanding ?? '0'
+
     return {
-      revenue: todayOrders._sum.total?.toString() ?? '0',
-      orderCount: todayOrders._count,
+      revenue: paidOrders._sum.total?.toString() ?? '0',
+      orderCount: paidOrders._count,
       yesterdayRevenue: yesterdayOrders._sum.total?.toString() ?? '0',
       yesterdayOrderCount: yesterdayOrders._count,
-      activeTabs,
+      // Every open tab right now, across the whole club, not just today's.
+      activeTabs: openTabs,
+      // Today's open work, so the manager can see the value on the floor as
+      // well as the money already banked.
+      openTabValue: openTabValue._sum.total?.toString() ?? '0',
+      outstanding: outstandingValue,
       paymentMix: paymentMix.map((payment) => ({
         method: payment.method,
         amount: payment._sum.amount?.toString() ?? '0',
@@ -151,7 +198,6 @@ const getCachedDashboard = unstable_cache(
         payments: order.payments,
         createdAt: order.createdAt.toISOString(),
       })),
-      outstanding: outstanding._sum.total?.toString() ?? '0',
       revenueByCategory: revenueByCategory.map((r) => ({
         category: r.category,
         amount: r.amount,

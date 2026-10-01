@@ -131,6 +131,8 @@ type DashboardData = {
   yesterdayRevenue: string
   yesterdayOrderCount: number
   activeTabs: number
+  /** Value of today's still-open orders, shown alongside settled revenue. */
+  openTabValue: string
   paymentMix: PaymentMixEntry[]
   tables: TableInfo[]
   lowStock: LowStockProduct[]
@@ -326,13 +328,24 @@ function OverviewView({
   setActiveNav: (nav: string) => void
 }) {
   const totalRevenue = parseFloat(data.revenue)
-  const foodRevenue = data.revenueByCategory
-    .filter((e) => e.category.toLowerCase().includes('food'))
-    .reduce((sum, e) => sum + parseFloat(e.amount), 0)
-  const poolRevenue = data.revenueByCategory
-    .filter((e) => e.category.toLowerCase().includes('pool'))
-    .reduce((sum, e) => sum + parseFloat(e.amount), 0)
-  const barRevenue = totalRevenue - foodRevenue - poolRevenue
+
+  /**
+   * The category split comes from the server already grouped into Food, Pool
+   * and Bar, so each figure is read directly.
+   *
+   * It used to be derived as `total - food - pool`, which quietly folded every
+   * category the code did not recognise into "Bar". A new category, or a typo
+   * in a category name, would then inflate bar takings rather than showing up
+   * as missing. The server now assigns each category explicitly.
+   */
+  const revenueFor = (bucket: string) =>
+    data.revenueByCategory
+      .filter((entry) => entry.category === bucket)
+      .reduce((sum, entry) => sum + parseFloat(entry.amount), 0)
+
+  const foodRevenue = revenueFor('Food')
+  const poolRevenue = revenueFor('Pool')
+  const barRevenue = revenueFor('Bar')
 
   const revenueChange = computeChange(totalRevenue, parseFloat(data.yesterdayRevenue))
   const orderChange = computeChange(data.orderCount, data.yesterdayOrderCount)
@@ -340,8 +353,8 @@ function OverviewView({
 
   const statCards = [
     { label: "Today's revenue", value: formatPrice(data.revenue), change: revenueChange.text, positive: revenueChange.positive },
-    { label: 'Orders', value: data.orderCount.toString(), change: orderChange.text, positive: orderChange.positive },
-    { label: 'Active tabs', value: data.activeTabs.toString(), change: '—', positive: true },
+    { label: 'Orders settled', value: data.orderCount.toString(), change: orderChange.text, positive: orderChange.positive },
+    { label: 'Open tabs today', value: formatPrice(data.openTabValue), change: `${data.activeTabs} open now`, positive: true },
     { label: 'Pool revenue', value: formatPrice(poolRevenue), change: '—', positive: true },
     { label: 'Bar revenue', value: formatPrice(barRevenue), change: '—', positive: true },
     { label: 'Food revenue', value: formatPrice(foodRevenue), change: '—', positive: true },
