@@ -7,6 +7,8 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/pending-approval(.*)',
+  // reachable with no session, so the service worker can precache it
+  '/offline(.*)',
   '/api/pesapal/ipn(.*)',
   '/api/pesapal/callback(.*)',
 ])
@@ -45,5 +47,10 @@ export default clerkMiddleware(async (auth, request) => {
 })
 
 export const config = {
-  matcher: ['/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf|map)).*)', '/(api|trpc)(.*)'],
+  matcher: [
+    // sw.js and the web app manifest are static shell files: they must reach
+    // the browser untouched, and neither needs a session.
+    '/((?!_next|sw\\.js|manifest\\.webmanifest|[^?]*\\.(?:html?|css|js(?!on)|png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf|map)).*)',
+    '/(api|trpc)(.*)',
+  ],
 }

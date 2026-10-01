@@ -192,6 +192,16 @@ def main():
     icon.save("app/icon.png")
     icon.resize((180, 180), Image.LANCZOS).save("app/apple-icon.png")
 
+    # Maskable variant: Android crops to a circle of 80% diameter, so the
+    # artwork is inset to 60% and the gold is bled to the full canvas edge.
+    # Without this the spade's corners get sliced off on a home screen.
+    inner = icon.resize((round(SIZE * 0.6), round(SIZE * 0.6)), Image.LANCZOS)
+    pad = round(SIZE * 0.2)
+    bleed = Image.new("RGB", (SIZE, SIZE), GOLD_TOP)
+    maskable = bleed.copy()
+    maskable.paste(inner, (pad, pad))
+    maskable.save("public/icon-maskable.png")
+
     # text preview so the silhouette can be eyeballed without an image viewer
     preview = spade.resize((36, 36), Image.LANCZOS)
     px = preview.load()
