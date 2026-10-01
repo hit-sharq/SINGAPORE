@@ -221,6 +221,15 @@ function formatDate(): string {
   })
 }
 
+/** Phones do not have room for "Thursday, 1 October 2026". */
+function formatDateShort(): string {
+  return new Date().toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
+
 function paymentMethodLabel(method: string): string {
   switch (method) {
     case 'PESAPAL':
@@ -4757,28 +4766,48 @@ export default function Page() {
         <header className="flex min-h-[76px] flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] px-4 py-3 sm:px-5 lg:px-8 dashboard-header">
           <div className="flex min-w-0 items-center gap-3">
             <button
-              className="text-[#92948c] lg:hidden p-2 hover:bg-white/5 rounded transition"
+              className="text-[#92948c] lg:hidden p-2 -ml-2 hover:bg-white/5 rounded transition"
               onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open menu"
             >
               <Menu size={22} />
             </button>
-            <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-[#73756f]">{formatDate()}</p>
-              <h1 className="mt-1 truncate text-xl font-semibold tracking-tight">
-                {getGreeting()}, {dashboardData.staff.name}
-                <span className="text-[#d8a85b]"> / </span>
-                <span className="text-[#96978f]">{activeNav}</span>
+            <div className="min-w-0 flex-1">
+              {/* A phone has no room for the weekday form, and the greeting
+                  would push the date out of view once the shift badge takes
+                  its share of the row. So the small row is the short date and
+                  the heading is the section; the greeting and full name stay on
+                  the desktop header, and the profile area shows the name. */}
+              <p className="truncate text-[11px] uppercase tracking-[0.16em] text-[#73756f]">
+                <span className="hidden sm:inline">{formatDate()}</span>
+                <span className="sm:hidden">{formatDateShort()}</span>
+              </p>
+              <h1 className="mt-1 truncate text-lg font-semibold tracking-tight sm:text-xl">
+                <span className="sm:hidden">{activeNav}</span>
+                <span className="hidden sm:inline">
+                  {getGreeting()}, {dashboardData.staff.name}
+                  <span className="text-[#d8a85b]"> / </span>
+                  <span className="text-[#96978f]">{activeNav}</span>
+                </span>
               </h1>
             </div>
           </div>
           <div className="flex items-center gap-3 dashboard-header-actions">
             {shift ? (
-              <div className="flex min-w-0 max-w-full items-center gap-3 rounded-md border border-[#d8a85b]/30 bg-[#d8a85b]/10 px-3 py-2 text-xs text-[#d8a85b]">
+              <div className="flex min-w-0 max-w-full items-center gap-2 rounded-md border border-[#d8a85b]/30 bg-[#d8a85b]/10 px-2.5 py-2 text-xs text-[#d8a85b] sm:gap-3 sm:px-3">
                 <span className="size-1.5 shrink-0 rounded-full bg-[#7cc58f] shadow-[0_0_8px_#7cc58f]" />
                 <span className="hidden truncate sm:inline">Shift open · {formatTime(shift.startsAt)} · Float: {formatPrice(shift.openingCash)} · Cash: {formatPrice(shift.cashDrawer?.balance ?? '0')}</span>
-                <span className="truncate sm:hidden">Open · {formatPrice(shift.openingCash)}</span>
-                <button onClick={() => setShowShiftModal(true)} className="ml-2 shrink-0 whitespace-nowrap rounded px-2 py-1 text-[10px] bg-[#d8a85b]/20 hover:bg-[#d8a85b]/30">
+                <span className="truncate sm:hidden">Open {formatTime(shift.startsAt)}</span>
+                <button
+                  onClick={() => setShowShiftModal(true)}
+                  className="hidden shrink-0 whitespace-nowrap rounded px-2 py-1 text-[10px] bg-[#d8a85b]/20 hover:bg-[#d8a85b]/30 sm:ml-1"
+                >
                   Manage
+                </button>
+                {/* the whole badge opens the shift sheet on a phone, so the
+                    separate button is not needed there */}
+                <button onClick={() => setShowShiftModal(true)} className="sm:hidden" aria-label="Manage shift">
+                  <span className="sr-only">Manage shift</span>
                 </button>
               </div>
             ) : (

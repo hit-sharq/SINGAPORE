@@ -489,7 +489,23 @@ body { @apply bg-background text-foreground; font-family: Arial, Helvetica, sans
 .dashboard-header-actions {
   @apply flex flex-wrap items-center justify-end gap-2 sm:gap-3;
 }
-@media (max-width: 767px) {
+@media (max-width: 639px) {
+  /* On a phone the header is one compact row: greeting on the left, shift
+     control and bell on the right. Letting the actions wrap to their own
+     full-width line doubled the header height and made it read like a native
+     app bar rather than a dense operations console. */
+  .dashboard-header {
+    @apply flex-nowrap items-center gap-2 py-2.5;
+  }
+  .dashboard-header-actions {
+    @apply w-auto shrink-0 flex-nowrap gap-1.5;
+  }
+  .dashboard-header-actions > div,
+  .dashboard-header-actions > button {
+    @apply max-w-full;
+  }
+}
+@media (min-width: 640px) and (max-width: 767px) {
   .dashboard-header {
     @apply flex flex-wrap items-center gap-3 py-3;
   }
