@@ -20,8 +20,11 @@ function getPath(request: NextRequest): string {
 export async function GET(request: NextRequest) {
   try {
     const staff = await requireRole(Object.values(Role))
+    // Every order in the club, not just the ones this staff member opened.
+    // Filtering on createdById made the Orders page look empty whenever the
+    // tab had been started by someone else — which on a busy floor is most of
+    // them — and left a manager unable to see what the team is serving.
     const orders = await prisma.order.findMany({
-      where: { createdById: staff.id },
       include: { items: { include: { product: true } }, payments: true, table: true },
       orderBy: { createdAt: 'desc' },
       take: 100,

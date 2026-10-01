@@ -247,6 +247,9 @@ function paymentMethodLabel(method: string): string {
   }
 }
 
+/** How often the dashboard re-reads live state while it is in use. */
+const DASHBOARD_POLL_MS = 15_000
+
 function getGreeting(): string {
   const hour = new Date().getHours()
   if (hour < 12) return 'Good morning'
@@ -4635,6 +4638,27 @@ export default function Page() {
     }
     fetchShift()
   }
+
+  /**
+   * Keep the dashboard in step with the floor.
+   *
+   * It previously re-read only when someone acted, so an order sent to a table
+   * from the till appeared on the floor page only after a manual reload. A
+   * manager watching the room had no way to see a table had just been seated
+   * or a tab had just closed.
+   *
+   * Paused when the tab is hidden or unfocused, so an idle screen left open
+   * all evening does not keep hitting the database.
+   */
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && document.hasFocus()) {
+        refreshDashboard()
+      }
+    }, DASHBOARD_POLL_MS)
+    return () => window.clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function openShift() {
     if (!openingCash) return

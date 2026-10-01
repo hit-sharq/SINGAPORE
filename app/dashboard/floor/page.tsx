@@ -11,6 +11,9 @@ type Table = {
   orders: { id: string; number: number; total: string; payments: { method: string; status: string }[] }[]
 }
 
+/** How often the floor re-reads table state while the page is in use. */
+const POLL_INTERVAL_MS = 10_000
+
 export default function FloorPage() {
   const [tables, setTables] = useState<Table[]>([])
   const [loading, setLoading] = useState(true)
@@ -38,6 +41,39 @@ export default function FloorPage() {
       setLoading(false)
     }
   }
+
+  /**
+   * Poll so the floor follows what the till is doing.
+   *
+   * The page loaded once on mount and then only refreshed when a table was
+   * edited by hand, so an order sent to a table from the POS did not show up
+   * until the page was reloaded. A waiter looking at the floor had no way to
+   * see which tables had just been seated.
+   *
+   * Pauses while the tab is hidden, and while the window does not have focus,
+   * so an idle screen is not polling in the background all evening.
+   */
+  useEffect(() => {
+    let timer: number | undefined
+
+    const tick = async () => {
+      if (document.visibilityState === 'visible' && document.hasFocus()) {
+        try {
+          const res = await fetch('/api/tables')
+          if (res.ok) {
+            const data = await res.json()
+            setTables(data.data.tables)
+          }
+        } catch {
+          // a failed poll is not worth surfacing; the next tick retries
+        }
+      }
+      timer = window.setTimeout(tick, POLL_INTERVAL_MS)
+    }
+
+    timer = window.setTimeout(tick, POLL_INTERVAL_MS)
+    return () => window.clearTimeout(timer)
+  }, [])
 
   const handleAddTable = async () => {
     if (!newTableName.trim()) return
