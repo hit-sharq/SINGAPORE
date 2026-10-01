@@ -5,10 +5,59 @@
 
 const PESAPAL_API_BASE = process.env.PESAPAL_API_BASE || 'https://api.pesapal.com'
 
+/**
+ * Every call to PesaPal is bounded. Without this, a stalled connection leaves
+ * the waiter watching a spinner on a payment that will never resolve, and the
+ * order is left holding a PENDING payment nobody can explain.
+ */
+const PESAPAL_TIMEOUT_MS = 20_000
+
 export class PesapalError extends Error {
   constructor(message: string, public status?: number) {
     super(message)
     this.name = 'PesapalError'
+  }
+}
+
+/** fetch with a deadline, so a hang surfaces as an error the caller can act on. */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = PESAPAL_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new PesapalError(`PesaPal did not respond within ${timeoutMs / 1000}s`)
+    }
+    // A network-level failure: DNS, TLS, or the connection dropping.
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new PesapalError(`Could not reach PesaPal: ${detail}`)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Read a JSON body, turning anything unparseable into a PesapalError.
+ *
+ * A proxy, a captive portal or an outage can return HTML instead of JSON, and
+ * the resulting SyntaxError is not a PesapalError — so it escaped the payment
+ * route's error handling and surfaced as a 500 instead of a gateway failure.
+ */
+async function readJson<T>(res: Response, what: string): Promise<T> {
+  const text = await res.text()
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    const preview = text.replace(/\s+/g, ' ').trim().slice(0, 120)
+    throw new PesapalError(
+      `PesaPal returned an unexpected response for ${what} (HTTP ${res.status}): ${preview || 'empty body'}`,
+      res.status,
+    )
   }
 }
 
@@ -21,7 +70,7 @@ export async function pesapalGetAuthToken(
   consumerKey: string,
   consumerSecret: string
 ): Promise<PesapalAuth> {
-  const res = await fetch(`${PESAPAL_API_BASE}/api/Auth/RequestToken`, {
+  const res = await fetchWithTimeout(`${PESAPAL_API_BASE}/api/Auth/RequestToken`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ consumer_key: consumerKey, consumer_secret: consumerSecret }),
@@ -30,7 +79,7 @@ export async function pesapalGetAuthToken(
     const text = await res.text()
     throw new PesapalError(`PesaPal auth failed: ${res.status} ${text}`, res.status)
   }
-  return res.json()
+  return readJson<PesapalAuth>(res, 'authentication')
 }
 
 export interface SubmitOrderParams {
@@ -65,7 +114,7 @@ export interface SubmitOrderResult {
 export async function pesapalSubmitOrder(
   params: SubmitOrderParams
 ): Promise<SubmitOrderResult> {
-  const res = await fetch(`${PESAPAL_API_BASE}/api/PesapalAPI`, {
+  const res = await fetchWithTimeout(`${PESAPAL_API_BASE}/api/PesapalAPI`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -93,7 +142,7 @@ export async function pesapalSubmitOrder(
         : undefined,
     }),
   })
-  const data: SubmitOrderResult = await res.json()
+  const data: SubmitOrderResult = await readJson<SubmitOrderResult>(res, 'order submission')
   if (!res.ok || data.error) {
     throw new PesapalError(
       data.message || data.error || `PesaPal submit failed: ${res.status}`,
@@ -122,7 +171,7 @@ export async function pesapalGetTransactionStatus(
   token: string,
   pesapalOrderId: string
 ): Promise<TransactionStatus> {
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `${PESAPAL_API_BASE}/api/PesapalAPI?pesapal_transaction_id=${encodeURIComponent(pesapalOrderId)}`,
     {
       headers: {
@@ -135,5 +184,5 @@ export async function pesapalGetTransactionStatus(
     const text = await res.text()
     throw new PesapalError(`PesaPal status check failed: ${res.status} ${text}`, res.status)
   }
-  return res.json()
+  return readJson<TransactionStatus>(res, 'transaction status')
 }
