@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useClerk } from '@clerk/nextjs'
 import {
   Activity,
@@ -55,7 +55,10 @@ import {
   ExternalLink,
   Wifi,
   WifiOff,
+  Check,
 } from 'lucide-react'
+import { PaymentQrCode } from '@/components/payment-qr'
+import { usePaymentWaiter, type WaitForPaymentOutcome } from '@/hooks/use-payment-waiter'
 
 type Category = { name: string }
 
@@ -4007,6 +4010,24 @@ type OrderDetail = {
 function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | null; onClose: () => void; onRefresh: () => void }) {
   const [processing, setProcessing] = useState<string | null>(null)
   const [paymentAmount, setPaymentAmount] = useState('')
+  // Set once a mobile-money request has been sent, so the modal shows the QR
+  // code and waits instead of redirecting the waiter away from the order.
+  const [mobilePay, setMobilePay] = useState<{ url: string; amount: string } | null>(null)
+
+  // While a mobile-money request is outstanding, watch the payment rather than
+  // reloading on a timer and hoping.
+  const handleSettled = useCallback(
+    (result: WaitForPaymentOutcome) => {
+      onRefresh()
+      if (result === 'COMPLETED') {
+        setMobilePay(null)
+        setPaymentAmount('')
+      }
+    },
+    [onRefresh],
+  )
+
+  const wait = usePaymentWaiter(order?.id ?? null, mobilePay !== null, handleSettled)
 
   const handlePayment = async (method: 'CASH' | 'CARD' | 'PESAPAL') => {
     if (!order) return
@@ -4022,13 +4043,26 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
       if (!response.ok) {
         throw new Error(data.error || 'Payment failed')
       }
-      // PesaPal returns a redirectUrl — send the user to PesaPal's payment page
-      if (method === 'PESAPAL' && data.data?.redirectUrl) {
-        window.location.href = data.data.redirectUrl
-        return
+
+      if (method === 'PESAPAL') {
+        const redirectUrl = data.data?.redirectUrl
+        if (redirectUrl) {
+          // Do NOT navigate the waiter away. The customer scans the code and
+          // pays on their own phone; the modal stays open and watches for the
+          // result. Redirecting would send the waiter's device to Pesapal and
+          // hand the customer the waiter's screen to type their PIN into.
+          setMobilePay({ url: redirectUrl, amount })
+          setProcessing(null)
+          return
+        }
+        if (data.data?.warning) {
+          throw new Error(data.data.warning)
+        }
       }
+
       onRefresh()
       setPaymentAmount('')
+      setProcessing(null)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Payment failed')
       setProcessing(null)
@@ -4156,7 +4190,110 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
                   </div>
                 ))
               )}
-              {hasOutstanding && (
+              {mobilePay && (
+                <div className="border-t border-white/[0.06] p-4">
+                  <div className="flex flex-col items-center gap-3 text-center">
+                    {wait.outcome === 'COMPLETED' ? (
+                      <>
+                        <div className="flex size-12 items-center justify-center rounded-full bg-[#7cc58f]/20 text-[#7cc58f]">
+                          <Check size={24} strokeWidth={2.5} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-[#7cc58f]">Payment received</p>
+                          <p className="mt-1 text-xs text-[#878981]">
+                            {formatPrice(mobilePay.amount)} confirmed
+                          </p>
+                        </div>
+                      </>
+                    ) : wait.outcome === 'FAILED' ? (
+                      <>
+                        <div className="flex size-12 items-center justify-center rounded-full bg-[#dc8c72]/20 text-[#dc8c72]">
+                          <X size={24} strokeWidth={2.5} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-[#dc8c72]">Payment failed</p>
+                          <p className="mt-1 text-xs text-[#878981]">
+                            The customer was declined. Ask them to try again.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setMobilePay(null)}
+                          className="mt-1 rounded-md border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-xs font-semibold text-[#d0d0c9] hover:bg-white/[0.08]"
+                        >
+                          Try another way
+                        </button>
+                      </>
+                    ) : wait.outcome === 'TIMED_OUT' ? (
+                      <>
+                        <div className="flex size-12 items-center justify-center rounded-full bg-[#d8a85b]/20 text-[#d8a85b]">
+                          <Clock3 size={24} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-[#d8a85b]">No confirmation yet</p>
+                          <p className="mt-1 text-xs text-[#878981]">
+                            It has been {Math.floor(wait.elapsed / 60)}m. Mobile money can be
+                            slow. Check the customer's phone before retrying, so they are not
+                            charged twice.
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setMobilePay(null)}
+                            className="rounded-md border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-xs font-semibold text-[#d0d0c9] hover:bg-white/[0.08]"
+                          >
+                            Close
+                          </button>
+                          <a
+                            href={mobilePay.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-md border border-[#d8a85b]/30 bg-[#d8a85b]/10 px-4 py-2.5 text-xs font-semibold text-[#d8a85b] hover:bg-[#d8a85b]/20"
+                          >
+                            Reopen payment
+                          </a>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-semibold">Ask the customer to pay</p>
+                        <p className="text-xs text-[#878981]">
+                          They scan this with their own phone and pay with M-Pesa or Airtel.
+                          Keep this screen open.
+                        </p>
+                        <PaymentQrCode value={mobilePay.url} size={208} className="mt-1" />
+                        <p className="text-lg font-semibold">{formatPrice(mobilePay.amount)}</p>
+                        <p className="flex items-center gap-2 text-xs text-[#d8a85b]">
+                          {wait.checking ? (
+                            <span className="size-1.5 animate-pulse rounded-full bg-[#d8a85b]" />
+                          ) : (
+                            <span className="size-1.5 rounded-full bg-[#d8a85b]/50" />
+                          )}
+                          {wait.checking ? 'Waiting for confirmation…' : 'Waiting…'}
+                        </p>
+                        <details className="w-full text-left">
+                          <summary className="cursor-pointer text-center text-[11px] text-[#777971] hover:text-[#a4a59e]">
+                            Cannot scan? Open the link
+                          </summary>
+                          <div className="mt-2 break-all rounded-md border border-white/[0.08] bg-[#20221e] p-2 text-[10px] text-[#878981]">
+                            {mobilePay.url}
+                          </div>
+                        </details>
+                        <button
+                          onClick={() => {
+                            wait.stop()
+                            setMobilePay(null)
+                          }}
+                          className="mt-1 text-[11px] text-[#777971] underline underline-offset-2 hover:text-[#a4a59e]"
+                        >
+                          Cancel this request
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {hasOutstanding && !mobilePay && (
                 <div className="border-t border-white/[0.06] p-4">
                   <div className="flex items-center gap-3 mb-3">
                     <label className="text-xs text-[#777971]">Amount</label>
@@ -4191,7 +4328,7 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
                       onClick={() => handlePayment('PESAPAL')}
                       className="flex-1 rounded-md border border-white/[0.1] bg-white/[0.04] py-2.5 text-xs font-semibold text-[#d0d0c9] hover:bg-white/[0.08] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {processing === 'PESAPAL' ? 'Processing...' : 'M-Pesa'}
+                      {processing === 'PESAPAL' ? 'Preparing…' : 'M-Pesa / Airtel'}
                     </button>
                   </div>
                 </div>

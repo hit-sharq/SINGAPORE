@@ -90,6 +90,10 @@ export interface TransactionStatus {
   status: string
   amount: number
   currency: string
+  /* PesaPal reports the status under a couple of different keys depending on
+     the endpoint and version, so both are accepted. */
+  payment_status_description?: string
+  payment_status?: string
 }
 
 export async function pesapalGetTransactionStatus(

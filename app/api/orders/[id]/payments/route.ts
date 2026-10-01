@@ -10,6 +10,7 @@ import {
 import { Role, PaymentMethod, PaymentStatus, OrderStatus } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
+import { getPesapalCredentials } from '@/lib/pesapal-verify'
 import { revalidateTag } from 'next/cache'
 
 const paymentSchema = z.object({
@@ -20,8 +21,12 @@ const paymentSchema = z.object({
   merchantRef: z.string().optional(),
 })
 
-const PESA_PAL_REDIRECT_URL = process.env.NEXT_PUBLIC_APP_URL
-  ? `${process.env.NEXT_PUBLIC_APP_URL}/api/pesapal/callback`
+const PESA_PAL_APP_URL = process.env.NEXT_PUBLIC_APP_URL
+  ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
+  : undefined
+
+const PESA_PAL_REDIRECT_URL = PESA_PAL_APP_URL
+  ? `${PESA_PAL_APP_URL}/api/pesapal/callback`
   : undefined
 
 function generateMerchantRef(orderNumber: number, paymentId: string): string {
@@ -102,7 +107,17 @@ export async function POST(
       })
 
       const newPaidAmount = paidAmount.plus(paymentAmount)
-      if (newPaidAmount.greaterThanOrEqualTo(order.total)) {
+
+      // Only a settled payment can close an order and release a table.
+      //
+      // A PesaPal payment is created PENDING because the money has not cleared
+      // yet. Counting it here marked the order PAID on intent rather than on
+      // money, and freed the table while the tab was still unpaid — so a failed
+      // or lost payment left a table open for the next customer. Mobile money
+      // in particular can sit unresolved for around 20 seconds.
+      const settlesImmediately = method !== 'PESAPAL'
+
+      if (settlesImmediately && newPaidAmount.greaterThanOrEqualTo(order.total)) {
         await tx.order.update({
           where: { id },
           data: { status: OrderStatus.PAID },
@@ -123,6 +138,26 @@ export async function POST(
         }
       }
 
+      // Record who took the payment, for which order and table, and how much.
+      // This is the trail a dispute at closing time is answered from.
+      await tx.auditLog.create({
+        data: {
+          userId: staff.id,
+          action: 'CREATE_PAYMENT',
+          entity: 'Payment',
+          entityId: created.id,
+          metadata: {
+            orderId: id,
+            orderNumber: order.number,
+            tableId: order.tableId ?? null,
+            method,
+            amount: paymentAmount.toString(),
+            currency,
+            status: created.status,
+          },
+        },
+      })
+
       return created
     })
 
@@ -134,9 +169,12 @@ export async function POST(
           prisma.appSetting.findUnique({ where: { key: 'pesapal_consumer_secret' } }),
           prisma.appSetting.findUnique({ where: { key: 'pesapal_ipn_url' } }),
         ])
-        // Env vars take precedence; fall back to database config
-        const consumerKey = process.env.PESAPAL_CONSUMER_KEY || keySetting?.value
-        const consumerSecret = process.env.PESAPAL_CONSUMER_SECRET || secretSetting?.value
+        // Env vars take precedence; fall back to the admin-saved settings, which
+        // are stored encrypted. Reading the raw value here would send the
+        // "enc:v1:..." envelope to PesaPal and fail every payment.
+        const credentials = await getPesapalCredentials()
+        const consumerKey = credentials?.consumerKey
+        const consumerSecret = credentials?.consumerSecret
         const ipnUrl = ipnSetting?.value
 
         if (!consumerKey || !consumerSecret) {
@@ -147,14 +185,26 @@ export async function POST(
         }
 
         const merchantRef = generateMerchantRef(order.number, payment.id)
-        const callbackUrl = ipnUrl || PESA_PAL_REDIRECT_URL
+        const callbackUrl = PESA_PAL_REDIRECT_URL
         if (!callbackUrl) {
           return successResponse({
             ...formatPayment(payment),
             warning: 'No callback URL configured',
           })
         }
-        const redirectUrl = callbackUrl
+
+        // The two endpoints must not be the same URL. The callback is opened in
+        // the customer's browser, while the IPN is called by PesaPal's server
+        // and has to return a body PesaPal can retry against. Pointing both at
+        // the redirect meant late status changes were handled by the weaker
+        // path and never retried.
+        const notificationUrl = ipnUrl || `${PESA_PAL_APP_URL}/api/pesapal/ipn`
+        if (!notificationUrl) {
+          return successResponse({
+            ...formatPayment(payment),
+            warning: 'No IPN URL configured',
+          })
+        }
 
         const result = await pesapalSubmitOrder({
           consumerKey,
@@ -164,8 +214,8 @@ export async function POST(
           currency: payment.currency,
           description: `Order #${order.number}`,
           callbackUrl,
-          notificationUrl: callbackUrl,
-          redirectUrl,
+          notificationUrl,
+          redirectUrl: callbackUrl,
         })
 
         await prisma.pesapalTransaction.create({

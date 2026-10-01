@@ -25,32 +25,26 @@ export function safeEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(bufA, bufB)
 }
 
-/* ---------- webhook signatures ---------- */
+/* ---------- inbound payment notifications ---------- */
 
-/**
- * HMAC-SHA256 signature check for inbound webhooks.
+/*
+ * There is deliberately no webhook-signature check here.
  *
- * The payment provider signs the raw body with a shared secret. Without this,
- * anyone who can reach the URL can mark an order paid, because the endpoint
- * would be trusting a `status` query parameter from the caller.
+ * Pesapal does not sign its IPN. Their documentation is explicit: they send
+ * only pesapal_transaction_tracking_id and pesapal_merchant_reference "for
+ * security reasons", and no signature or HMAC accompanies them. IP whitelisting
+ * is also unavailable because their addresses can change without notice.
+ *
+ * An earlier version of this file verified an HMAC that Pesapal can never
+ * send, which meant the webhook rejected every legitimate notification while
+ * the real problem went unaddressed.
+ *
+ * The protection is instead server-side verification: treat everything in the
+ * incoming request as a hint, then ask Pesapal over an authenticated API call
+ * what the transaction's real status is. A forged request cannot invent a
+ * transaction that exists on Pesapal's side. See lib/pesapal.ts and
+ * lib/pesapal-verify.ts.
  */
-export function verifyWebhookSignature(
-  rawBody: string,
-  signature: string | null,
-  secret: string | undefined,
-): boolean {
-  if (!secret || !signature) return false
-
-  // Accept the common "sha256=<hex>" form as well as a bare hex digest.
-  const provided = signature.startsWith('sha256=') ? signature.slice(7) : signature
-
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(rawBody, 'utf8')
-    .digest('hex')
-
-  return safeEqual(expected, provided)
-}
 
 /* ---------- password hashing (scrypt) ---------- */
 
