@@ -59,6 +59,7 @@ import {
 } from 'lucide-react'
 import { PaymentQrCode } from '@/components/payment-qr'
 import { usePaymentWaiter, type WaitForPaymentOutcome } from '@/hooks/use-payment-waiter'
+import { normaliseKenyanPhone, formatKenyanPhone } from '@/lib/phone'
 
 type Category = { name: string }
 
@@ -4013,6 +4014,9 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
   // Set once a mobile-money request has been sent, so the modal shows the QR
   // code and waits instead of redirecting the waiter away from the order.
   const [mobilePay, setMobilePay] = useState<{ url: string; amount: string } | null>(null)
+  // The customer types their number here instead of scanning, and Pesapal
+  // prefills the payment page with it so they receive the STK prompt.
+  const [payerPhone, setPayerPhone] = useState('')
 
   // While a mobile-money request is outstanding, watch the payment rather than
   // reloading on a timer and hoping.
@@ -4037,11 +4041,20 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
       const response = await fetch(`/api/orders/${order.id}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method, amount }),
+        body: JSON.stringify({
+          method,
+          amount,
+          // only sent for mobile money; the API rejects it for other methods
+          ...(method === 'PESAPAL' && payerPhone.trim() ? { payerPhone: payerPhone.trim() } : {}),
+        }),
       })
       const data = await response.json()
       if (!response.ok) {
-        throw new Error(data.error || 'Payment failed')
+        // The API returns { code, message, details }. For an invalid number,
+        // details.field is 'payerPhone' and the message explains what is wrong,
+        // so the waiter sees why rather than a generic failure.
+        const message = data?.message || data?.error || 'Payment failed'
+        throw new Error(message)
       }
 
       if (method === 'PESAPAL') {
@@ -4052,6 +4065,7 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
           // result. Redirecting would send the waiter's device to Pesapal and
           // hand the customer the waiter's screen to type their PIN into.
           setMobilePay({ url: redirectUrl, amount })
+          setPayerPhone('')
           setProcessing(null)
           return
         }
@@ -4299,6 +4313,7 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
                     <label className="text-xs text-[#777971]">Amount</label>
                     <input
                       type="number"
+                      inputMode="decimal"
                       step="0.01"
                       min="0.01"
                       max={parseFloat(order.outstanding)}
@@ -4307,6 +4322,40 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
                       placeholder={order.outstanding}
                       className="flex-1 max-w-[150px] h-10 rounded-md border border-white/[0.1] bg-[#20221e] px-3 text-sm outline-none placeholder:text-[#666860] focus:border-[#d8a85b]/60"
                     />
+                  </div>
+
+                  {/* The customer number, so the waiter can type it instead of
+                      the customer scanning. Pesapal prefills the payment page
+                      with it, and the customer gets the STK prompt. */}
+                  <div className="mb-3">
+                    <label className="block text-xs text-[#777971] mb-1.5">
+                      Customer number
+                      <span className="ml-1.5 text-[10px] text-[#666860]">
+                        optional — they can also scan instead
+                      </span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        value={payerPhone}
+                        onChange={(e) => setPayerPhone(e.target.value)}
+                        placeholder="07XX XXX XXX"
+                        className="flex-1 h-10 rounded-md border border-white/[0.1] bg-[#20221e] px-3 text-sm outline-none placeholder:text-[#666860] focus:border-[#d8a85b]/60"
+                      />
+                      {payerPhone.trim() !== '' && (
+                        <span className="shrink-0 text-[10px]">
+                          {normaliseKenyanPhone(payerPhone) ? (
+                            <span className="text-[#7cc58f]">
+                              {formatKenyanPhone(normaliseKenyanPhone(payerPhone)!)}
+                            </span>
+                          ) : (
+                            <span className="text-[#dc8c72]">Not a valid number</span>
+                          )}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button

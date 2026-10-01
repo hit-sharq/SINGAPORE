@@ -11,6 +11,7 @@ import { Role, PaymentMethod, PaymentStatus, OrderStatus } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 import { getPesapalCredentials } from '@/lib/pesapal-verify'
+import { normaliseKenyanPhone } from '@/lib/phone'
 import { revalidateTag } from 'next/cache'
 
 const paymentSchema = z.object({
@@ -19,6 +20,10 @@ const paymentSchema = z.object({
   currency: z.string().default('KES'),
   pesapalOrderId: z.string().optional(),
   merchantRef: z.string().optional(),
+  // The waiter types the customer's number so the payment prompt goes straight
+  // to them. Validated here because a mistyped number sends the prompt to a
+  // stranger, and that is only recoverable after the fact.
+  payerPhone: z.string().optional(),
 })
 
 const PESA_PAL_APP_URL = process.env.NEXT_PUBLIC_APP_URL
@@ -58,7 +63,30 @@ export async function POST(
       return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid payment data', 400, parsed.error.issues, getPath(request))
     }
 
-    const { method, amount, currency, pesapalOrderId, merchantRef } = parsed.data
+    const { method, amount, currency, pesapalOrderId, merchantRef, payerPhone } = parsed.data
+
+    let normalisedPhone: string | null = null
+    if (payerPhone !== undefined) {
+      if (method !== 'PESAPAL') {
+        return errorResponse(
+          ErrorCodes.VALIDATION_ERROR,
+          'A phone number only applies to mobile money',
+          400,
+          { field: 'payerPhone' },
+          getPath(request)
+        )
+      }
+      normalisedPhone = normaliseKenyanPhone(payerPhone)
+      if (!normalisedPhone) {
+        return errorResponse(
+          ErrorCodes.VALIDATION_ERROR,
+          'That does not look like a Kenyan mobile number',
+          400,
+          { field: 'payerPhone' },
+          getPath(request)
+        )
+      }
+    }
 
     const order = await prisma.order.findUnique({
       where: { id },
@@ -154,6 +182,7 @@ export async function POST(
             amount: paymentAmount.toString(),
             currency,
             status: created.status,
+            payerPhone: normalisedPhone,
           },
         },
       })
@@ -216,6 +245,7 @@ export async function POST(
           callbackUrl,
           notificationUrl,
           redirectUrl: callbackUrl,
+          payerPhone: normalisedPhone ?? undefined,
         })
 
         await prisma.pesapalTransaction.create({
@@ -237,6 +267,9 @@ export async function POST(
             pesapalOrderId: result.pesapal_transaction_id,
             confirmationRef: result.pesapal_transaction_id,
             rawResponse: result as any,
+            // Recorded so a mismatched payment can be traced to a number at
+            // closing time without asking Pesapal.
+            externalRef: normalisedPhone ?? undefined,
           },
         })
 

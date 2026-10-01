@@ -43,6 +43,15 @@ export interface SubmitOrderParams {
   callbackUrl: string
   notificationUrl: string
   redirectUrl: string
+  /**
+   * The payer's mobile number, already normalised to 2547XXXXXXXX.
+   *
+   * PesaPal uses this to prefill the payment page, so the customer confirms the
+   * number on their own phone rather than being asked to type it after scanning
+   * a code. That is what turns a scan into a one-tap STK prompt.
+   */
+  payerPhone?: string
+  branch?: string
 }
 
 export interface SubmitOrderResult {
@@ -69,6 +78,19 @@ export async function pesapalSubmitOrder(
       callback_url: params.callbackUrl,
       notification_url: params.notificationUrl,
       redirect_url: params.redirectUrl,
+      branch: params.branch,
+      // Prefills the payment page so the customer does not have to type their
+      // own number on a phone they are already holding.
+      billing_address: params.payerPhone
+        ? {
+            phone_number: params.payerPhone,
+            country_code: 'KE',
+            email_address: '',
+            first_name: '',
+            middle_name: '',
+            last_name: '',
+          }
+        : undefined,
     }),
   })
   const data: SubmitOrderResult = await res.json()
