@@ -6,6 +6,7 @@ import { Role } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 import { revalidateTag } from 'next/cache'
+import { markTableOccupied } from '@/lib/tables'
 
 const orderSchema = z.object({
   tableId: z.string().optional(),
@@ -105,6 +106,14 @@ export async function POST(request: NextRequest) {
       for (const item of items) {
         await tx.product.update({ where: { id: item.productId }, data: { stock: { decrement: item.quantity } } })
       }
+
+      // A table with an open order against it is occupied. Without this the
+      // floor showed "Ready for a new session" while a tab was running, and
+      // the next waiter could seat a new party on top of it.
+      if (input.tableId) {
+        await markTableOccupied(tx, input.tableId)
+      }
+
       return created
     })
 

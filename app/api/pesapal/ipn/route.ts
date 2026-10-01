@@ -4,6 +4,7 @@ import { PaymentStatus, OrderStatus } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import { enforceRateLimit, LIMITS } from '@/lib/rate-limit'
 import { verifyTransactionWithPesapal, toPaymentStatus } from '@/lib/pesapal-verify'
+import { releaseTableIfFree } from '@/lib/tables'
 
 /**
  * PesaPal IPN — the provider's server-to-server status notification.
@@ -133,10 +134,7 @@ export async function GET(request: NextRequest) {
 
               // Money confirmed: now the table can be released.
               if (order.tableId) {
-                await tx.venueTable.update({
-                  where: { id: order.tableId },
-                  data: { status: 'AVAILABLE' },
-                })
+                await releaseTableIfFree(tx, order.tableId)
               }
             }
           }

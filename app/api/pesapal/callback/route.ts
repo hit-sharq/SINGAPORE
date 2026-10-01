@@ -4,6 +4,7 @@ import { PaymentStatus, OrderStatus } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import { enforceRateLimit, LIMITS } from '@/lib/rate-limit'
 import { verifyTransactionWithPesapal, toPaymentStatus } from '@/lib/pesapal-verify'
+import { releaseTableIfFree } from '@/lib/tables'
 
 /**
  * PesaPal callback — the page the customer's browser lands on after paying.
@@ -124,10 +125,7 @@ export async function GET(request: NextRequest) {
               })
 
               if (order.tableId) {
-                await tx.venueTable.update({
-                  where: { id: order.tableId },
-                  data: { status: 'AVAILABLE' },
-                })
+                await releaseTableIfFree(tx, order.tableId)
               }
             }
           }

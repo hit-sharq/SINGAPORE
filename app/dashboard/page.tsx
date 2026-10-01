@@ -280,19 +280,30 @@ function getInitials(name: string): string {
     .slice(0, 2)
 }
 
+/**
+ * A table is occupied whenever it has a live order, even if the stored status
+ * disagrees. The status column is a cache that a manual override or an older
+ * order can leave stale, whereas the open order is the fact. Trusting status
+ * alone meant a table with a running tab could read "Ready for a new session",
+ * and a waiter would seat a new party on top of it.
+ */
+function isTableOccupied(table: TableInfo): boolean {
+  return !!table.orders?.[0] && (table.status === 'OCCUPIED' || table.orders!.length > 0)
+}
+
 function getTableDetail(table: TableInfo): string {
   const activeOrder = table.orders?.[0]
-  if (table.status === 'OCCUPIED' && activeOrder) {
+  if (activeOrder && isTableOccupied(table)) {
     return `${formatTime(activeOrder.createdAt)} · ${formatPrice(activeOrder.total)}`
   }
-  if (table.status === 'AVAILABLE') return 'Ready for a new session'
   if (table.status === 'CLEANING') return 'Needs attention'
-  return 'Reserved'
+  if (table.status === 'RESERVED') return 'Reserved'
+  return 'Ready for a new session'
 }
 
 function getTableGuest(table: TableInfo): string | undefined {
   const activeOrder = table.orders?.[0]
-  if (table.status === 'OCCUPIED' && activeOrder) {
+  if (activeOrder && isTableOccupied(table)) {
     return `Tab #${activeOrder.number}`
   }
   return undefined

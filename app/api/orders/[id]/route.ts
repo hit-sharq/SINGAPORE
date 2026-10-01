@@ -6,6 +6,7 @@ import { Role, OrderStatus } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 import { revalidateTag } from 'next/cache'
+import { releaseTableIfFree } from '@/lib/tables'
 
 const statusSchema = z.object({
   status: z.nativeEnum(OrderStatus),
@@ -152,10 +153,7 @@ export async function PATCH(
           })
         }
         if (updatedOrder.tableId) {
-          await tx.venueTable.update({
-            where: { id: updatedOrder.tableId },
-            data: { status: 'AVAILABLE' },
-          })
+          await releaseTableIfFree(tx, updatedOrder.tableId)
         }
       }
 
@@ -176,10 +174,7 @@ export async function PATCH(
           }
         }
         if (updatedOrder.tableId) {
-          await tx.venueTable.update({
-            where: { id: updatedOrder.tableId },
-            data: { status: 'AVAILABLE' },
-          })
+          await releaseTableIfFree(tx, updatedOrder.tableId)
         }
       }
 

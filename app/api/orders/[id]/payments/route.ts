@@ -11,6 +11,7 @@ import { Role, PaymentMethod, PaymentStatus, OrderStatus } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import { errorResponse, createdResponse, successResponse, ErrorCodes } from '@/lib/api/response'
 import { getPesapalCredentials } from '@/lib/pesapal-verify'
+import { releaseTableIfFree } from '@/lib/tables'
 import { normaliseKenyanPhone } from '@/lib/phone'
 import { revalidateTag } from 'next/cache'
 
@@ -175,10 +176,7 @@ export async function POST(
           },
         })
         if (order.tableId) {
-          await tx.venueTable.update({
-            where: { id: order.tableId },
-            data: { status: 'AVAILABLE' },
-          })
+          await releaseTableIfFree(tx, order.tableId)
         }
       }
 

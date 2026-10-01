@@ -111,9 +111,16 @@ export default function FloorPage() {
     CLEANING: '#a4a59e',
   }
 
+  /**
+   * A live order makes a table occupied regardless of the stored status. The
+   * status column can be left stale by a manual override, and a table with a
+   * running tab reading as "Available" invites a second party onto it.
+   */
+  const isOccupied = (table: Table) => (table.orders?.length ?? 0) > 0
+
   const getTableDetail = (table: Table) => {
-    if (table.status === 'OCCUPIED' && table.orders?.length > 0) {
-      const order = table.orders[0]
+    if (isOccupied(table)) {
+      const order = table.orders![0]
       return `Order #${order.number}`
     }
     if (table.status === 'RESERVED') return 'Reserved'
@@ -150,11 +157,15 @@ export default function FloorPage() {
           <p className="col-span-full text-center text-xs text-[#777971] py-8">No tables configured.</p>
         ) : (
           tables.map((table) => {
-            const color = statusColors[table.status]
+            const occupied = isOccupied(table)
+            // Show OCCUPIED whenever a live order exists, so the badge and
+            // border agree with the detail line instead of contradicting it.
+            const shownStatus = occupied ? 'OCCUPIED' : table.status
+            const color = statusColors[shownStatus]
             return (  <div
                 key={table.id}
                 className={`relative border p-4 min-h-[160px] flex flex-col overflow-visible ${
-                  table.status === 'OCCUPIED'
+                  shownStatus === 'OCCUPIED'
                     ? 'border-[#d8a85b]/40 bg-[#211e17]'
                     : 'border-white/[0.08] bg-[#181a17]'
                 }`}
@@ -166,16 +177,16 @@ export default function FloorPage() {
                   </div>
                   <span
                     className={`text-[9px] font-semibold tracking-[0.12em] px-2 py-0.5 rounded shrink-0 whitespace-nowrap ${
-                      table.status === 'OCCUPIED'
+                      shownStatus === 'OCCUPIED'
                         ? 'text-[#d8a85b] bg-[#d8a85b]/15'
-                        : table.status === 'RESERVED'
+                        : shownStatus === 'RESERVED'
                         ? 'text-[#d78d6f] bg-[#d78d6f]/15'
-                        : table.status === 'CLEANING'
+                        : shownStatus === 'CLEANING'
                         ? 'text-[#a4a59e] bg-[#a4a59e]/15'
                         : 'text-[#7cc58f] bg-[#7cc58f]/15'
                     }`}
                   >
-                    {table.status}
+                    {shownStatus}
                   </span>
                 </div>
 
@@ -183,7 +194,7 @@ export default function FloorPage() {
                 <div className="mt-4 flex-1 min-w-0">
                   <p className="text-[12px] font-semibold tracking-[0.1em] text-[#d7d6ce] truncate">{table.name}</p>
                   <p className="mt-1 text-xs text-[#777971] truncate">{getTableDetail(table)}</p>
-                  {table.status === 'OCCUPIED' && table.orders?.length > 0 && (
+                  {shownStatus === 'OCCUPIED' && table.orders?.length > 0 && (
                     <p className="mt-2 text-[10px] text-[#d8a85b] truncate">Order #{table.orders[0].number}</p>
                   )}
                 </div>
