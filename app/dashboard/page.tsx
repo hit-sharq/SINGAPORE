@@ -4070,7 +4070,9 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
 
   const wait = usePaymentWaiter(order?.id ?? null, mobilePay !== null, handleSettled)
 
-  const handlePayment = async (method: 'CASH' | 'CARD' | 'PESAPAL') => {
+  // CARD is deliberately absent: there is no card integration, and the API
+  // refuses the method. The type keeps a stray call from compiling.
+  const handlePayment = async (method: 'CASH' | 'PESAPAL') => {
     if (!order) return
     const amount = paymentAmount || order.outstanding
     setProcessing(method)
@@ -4408,12 +4410,25 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
                     >
                       {processing === 'CASH' ? 'Processing...' : 'Cash'}
                     </button>
+                    {/*
+                      Card is not available yet.
+
+                      There is no card integration in this system. Any method
+                      other than PesaPal used to be marked COMPLETED the moment
+                      it was recorded, so this button settled an order without
+                      charging anything — handing a customer a receipt for money
+                      that was never taken.
+
+                      It stays visible but disabled rather than disappearing, so
+                      the till looks the same for staff and the reason is on
+                      screen instead of the button mysteriously missing.
+                    */}
                     <button
-                      disabled={processing === 'CARD' || !hasOutstanding}
-                      onClick={() => handlePayment('CARD')}
-                      className="flex-1 rounded-md border border-white/[0.1] bg-white/[0.04] py-2.5 text-xs font-semibold text-[#d0d0c9] hover:bg-white/[0.08] disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled
+                      title="Card payments are not available yet"
+                      className="flex-1 cursor-not-allowed rounded-md border border-white/[0.06] bg-white/[0.015] py-2.5 text-xs font-semibold text-[#5c5e58]"
                     >
-                      {processing === 'CARD' ? 'Processing...' : 'Card'}
+                      Card
                     </button>
                     <button
                       disabled={processing === 'PESAPAL' || !hasOutstanding}

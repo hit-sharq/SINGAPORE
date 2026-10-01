@@ -86,6 +86,25 @@ export async function POST(
 
     const { method, amount, currency, pesapalOrderId, merchantRef, payerPhone } = parsed.data
 
+    /**
+     * Card is not implemented, so it must not be recordable.
+     *
+     * Cash and PesaPal are the only methods that correspond to money actually
+     * changing hands. Any other method used to fall through to the "settles
+     * immediately" branch and be marked COMPLETED, which meant a crafted
+     * request could mark an order paid with nothing charged — the UI hiding the
+     * button is not a defence, so it is refused here too.
+     */
+    if (method !== 'CASH' && method !== 'PESAPAL') {
+      console.error(`POST /api/orders/${id}/payments: refused unsupported method ${method}`)
+      return staffErrorResponse(
+        'PAYMENT_NOT_CONFIGURED',
+        400,
+        `method ${method} has no payment integration`,
+        getPath(request)
+      )
+    }
+
     let normalisedPhone: string | null = null
     if (payerPhone !== undefined) {
       if (method !== 'PESAPAL') {
