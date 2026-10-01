@@ -99,7 +99,23 @@ export async function requireRole(roles: Role[]) {
   if (!staff || !staff.roles.some((role) => roles.includes(role))) {
     throw new Error('FORBIDDEN')
   }
+  // Roles alone are not permission to act. A suspended or deactivated account
+  // keeps its roles, so without this check a staff member removed by an admin
+  // would keep working until their cached profile expired.
+  if (!isStaffActive(staff)) {
+    throw new Error('FORBIDDEN')
+  }
   return staff
+}
+
+/**
+ * Whether a staff profile may act. A profile counts as active only when the
+ * status string says ACTIVE *and* the active flag has not been cleared —
+ * both fields exist and both are set by different parts of the app.
+ */
+export function isStaffActive(staff: { status?: string | null; active?: boolean | null }): boolean {
+  const statusOk = !staff.status || String(staff.status).toUpperCase() === 'ACTIVE'
+  return statusOk && staff.active !== false
 }
 
 export async function ensureStaffProfile() {

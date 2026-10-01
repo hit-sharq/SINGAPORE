@@ -1,6 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { getStaffStatus } from '@/lib/authorization'
+import { rateLimit, LIMITS, clientIdentifier } from '@/lib/rate-limit'
 
 const isPublicRoute = createRouteMatcher([
   '/',
@@ -14,6 +15,29 @@ const isPublicRoute = createRouteMatcher([
 ])
 
 export default clerkMiddleware(async (auth, request) => {
+  // Sign-in is the endpoint worth guessing at, so it gets a strict limit
+  // before any session work happens. This runs ahead of the page, which is
+  // why it lives here and not in the client component.
+  if (request.nextUrl.pathname.startsWith('/sign-in')) {
+    const result = rateLimit(`signin:${clientIdentifier(request)}`, LIMITS.signIn)
+    if (!result.ok) {
+      return new NextResponse('Too many sign-in attempts. Please try again later.', {
+        status: 429,
+        headers: { 'Retry-After': String(result.retryAfterSeconds) },
+      })
+    }
+  }
+
+  if (request.nextUrl.pathname.startsWith('/sign-up')) {
+    const result = rateLimit(`signup:${clientIdentifier(request)}`, LIMITS.signUp)
+    if (!result.ok) {
+      return new NextResponse('Too many sign-up attempts. Please try again later.', {
+        status: 429,
+        headers: { 'Retry-After': String(result.retryAfterSeconds) },
+      })
+    }
+  }
+
   // The root path is not a landing page: send people straight to the auth
   // system, or to the workspace if they already have a session.
   if (request.nextUrl.pathname === '/') {

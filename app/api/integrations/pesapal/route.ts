@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { Role } from '@prisma/client'
 import { z } from 'zod'
 import { errorResponse, successResponse, ErrorCodes } from '@/lib/api/response'
+import { encryptSecret, maskSecret, resolveStoredSecret } from '@/lib/security'
 
 const pesapalSchema = z.object({
   consumerKey: z.string().min(1, 'Consumer key is required'),
@@ -27,10 +28,17 @@ export async function GET(request: NextRequest) {
       prisma.appSetting.findUnique({ where: { key: 'pesapal_enabled' } }),
     ])
 
+    const resolvedSecret =
+      process.env.PESAPAL_CONSUMER_SECRET || resolveStoredSecret(secret?.value)
+
+    // The secret never leaves the server. Sending it would put it in browser
+    // devtools, in any proxy log, and in screenshots an admin shares.
+    // Only enough of it is returned for the UI to show which one is in use.
     return successResponse({
       config: {
         consumerKey: process.env.PESAPAL_CONSUMER_KEY || key?.value || '',
-        consumerSecret: process.env.PESAPAL_CONSUMER_SECRET || secret?.value || '',
+        consumerSecret: resolvedSecret ? maskSecret(resolvedSecret) : '',
+        hasConsumerSecret: Boolean(resolvedSecret),
         ipnUrl: ipnUrl?.value || '',
         enabled: enabled?.value === 'true',
       },
@@ -63,8 +71,9 @@ export async function POST(request: NextRequest) {
     })
     await prisma.appSetting.upsert({
       where: { key: 'pesapal_consumer_secret' },
-      update: { value: consumerSecret },
-      create: { key: 'pesapal_consumer_secret', value: consumerSecret },
+      // encrypted at rest: a database dump should not reveal the credential
+      update: { value: encryptSecret(consumerSecret) },
+      create: { key: 'pesapal_consumer_secret', value: encryptSecret(consumerSecret) },
     })
     if (ipnUrl) {
       await prisma.appSetting.upsert({

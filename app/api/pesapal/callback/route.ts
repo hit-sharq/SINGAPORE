@@ -2,13 +2,33 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { PaymentStatus, OrderStatus } from '@prisma/client'
 import { Prisma } from '@prisma/client'
+import { verifyWebhookSignature, safeEqual } from '@/lib/security'
+import { enforceRateLimit, LIMITS } from '@/lib/rate-limit'
 
 /**
- * PesaPal callback endpoint — receives the payment result and updates the Payment record.
- * This is a public route (no auth) — whitelisted in proxy.ts.
+ * PesaPal callback — this one is opened in the customer's browser, not called
+ * by the provider's server.
+ *
+ * The query string is signed exactly like the IPN, so the same check applies.
+ * The additional guard is that we never trust the caller's own `status`
+ * parameter: the payment is only marked paid once the amount recorded against
+ * the order actually covers the order total, and the stored callback payload
+ * agrees.
  */
 export async function GET(request: NextRequest) {
   const url = new URL(request.url)
+
+  const limited = enforceRateLimit(request, LIMITS.webhook, 'pesapal-callback')
+  if (limited) return limited
+
+  const rawQuery = request.nextUrl.search.slice(1)
+  const signature = request.headers.get('x-pesapal-signature')
+
+  if (!verifyWebhookSignature(rawQuery, signature, process.env.PESAPAL_IPN_SECRET)) {
+    console.warn('PesaPal callback rejected: bad or missing signature')
+    return NextResponse.redirect(new URL('/?payment=error', url.origin))
+  }
+
   const orderTrackingId = url.searchParams.get('OrderTrackingId')
   const merchantReference = url.searchParams.get('OrderMerchantReference')
   const status = url.searchParams.get('status')

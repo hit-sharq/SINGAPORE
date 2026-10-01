@@ -2,8 +2,32 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { PaymentStatus, OrderStatus } from '@prisma/client'
 import { Prisma } from '@prisma/client'
+import { verifyWebhookSignature, safeEqual } from '@/lib/security'
+import { enforceRateLimit, LIMITS } from '@/lib/rate-limit'
 
+/**
+ * PesaPal IPN endpoint — the payment provider's server-to-server notification.
+ *
+ * This route is public (no session) and whitelisted in proxy.ts, so the
+ * signature check below is the only thing standing between a stranger and the
+ * club's books. Without it, anyone could mark an order paid.
+ */
 export async function GET(request: NextRequest) {
+  // Rate limit before any database work, so a flood cannot be used to
+  // pressure the database either.
+  const limited = enforceRateLimit(request, LIMITS.webhook, 'pesapal-ipn')
+  if (limited) return limited
+
+  // Signature is verified against the exact bytes the provider signed, so read
+  // the raw query string rather than trusting the caller's word for the status.
+  const rawQuery = request.nextUrl.search.slice(1)
+  const signature = request.headers.get('x-pesapal-signature')
+
+  if (!verifyWebhookSignature(rawQuery, signature, process.env.PESAPAL_IPN_SECRET)) {
+    console.warn('PesaPal IPN rejected: bad or missing signature')
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+  }
+
   const url = new URL(request.url)
   const orderTrackingId = url.searchParams.get('OrderTrackingId')
   const merchantReference = url.searchParams.get('OrderMerchantReference')
