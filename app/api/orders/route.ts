@@ -39,10 +39,28 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const staff = await requireRole([Role.ADMIN, Role.MANAGER, Role.CASHIER, Role.BARTENDER, Role.WAITER])
-    const body = await request.json()
+
+    // A malformed body should be a clear 400 rather than a 500 from a JSON
+    // parse error, and the reason belongs in the log so a rejected order can
+    // be diagnosed from the server output instead of guessed at.
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      console.error('POST /api/orders: body was not valid JSON')
+      return errorResponse(
+        ErrorCodes.VALIDATION_ERROR,
+        'Expected a JSON body',
+        400,
+        undefined,
+        getPath(request)
+      )
+    }
+
     const parsed = orderSchema.safeParse(body)
 
     if (!parsed.success) {
+      console.error('POST /api/orders: schema rejected the payload', parsed.error.issues)
       return errorResponse(ErrorCodes.VALIDATION_ERROR, 'Invalid order data', 400, parsed.error.issues, getPath(request))
     }
 
@@ -51,7 +69,25 @@ export async function POST(request: NextRequest) {
     const order = await prisma.$transaction(async (tx) => {
       const products = await tx.product.findMany({ where: { id: { in: input.items.map((item) => item.productId) }, status: 'ACTIVE' } })
       if (products.length !== input.items.length) {
-        return errorResponse(ErrorCodes.VALIDATION_ERROR, 'One or more products not found or inactive', 400, undefined, getPath(request))
+        // Name the offending products. A generic "one or more products not
+        // found" gives the waiter nothing to act on, and this is the 400 a
+        // sale actually hits when an item was deactivated or deleted while it
+        // sat in the cart.
+        const found = new Set(products.map((product) => product.id))
+        const missing = input.items.filter((item) => !found.has(item.productId))
+        console.error(
+          'POST /api/orders: products not found or inactive',
+          missing.map((item) => item.productId)
+        )
+        return errorResponse(
+          ErrorCodes.VALIDATION_ERROR,
+          missing.length === 1
+            ? 'One item is no longer available. Remove it from the cart and try again.'
+            : `${missing.length} items are no longer available. Remove them from the cart and try again.`,
+          400,
+          { productIds: missing.map((item) => item.productId) },
+          getPath(request)
+        )
       }
       const items = input.items.map((item) => {
         const product = products.find((candidate) => candidate.id === item.productId)!

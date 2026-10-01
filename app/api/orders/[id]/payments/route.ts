@@ -56,7 +56,23 @@ export async function POST(
   try {
     const staff = await requireRole([Role.ADMIN, Role.MANAGER, Role.CASHIER, Role.BARTENDER, Role.WAITER])
     const { id } = await params
-    const body = await request.json()
+
+    // A malformed or empty body should be a clear 400, not a 500 from a JSON
+    // parse error. The dashboard once sent HTML here, which surfaced as
+    // "Unexpected token '<'" and looked like a server fault.
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return errorResponse(
+        ErrorCodes.VALIDATION_ERROR,
+        'Expected a JSON body',
+        400,
+        undefined,
+        getPath(request)
+      )
+    }
+
     const parsed = paymentSchema.safeParse(body)
 
     if (!parsed.success) {
