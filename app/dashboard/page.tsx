@@ -321,11 +321,13 @@ function OverviewView({
   onOrderClick,
   setShowSale,
   setActiveNav,
+  onRefresh,
 }: {
   data: DashboardData
   onOrderClick: (orderId: string) => void
   setShowSale: (show: boolean) => void
   setActiveNav: (nav: string) => void
+  onRefresh: () => void
 }) {
   const totalRevenue = parseFloat(data.revenue)
 
@@ -399,12 +401,18 @@ function OverviewView({
             <Plus size={15} />
             New sale
           </button>
+          {/*
+            This used to call setActiveNav('Overview') from the Overview screen,
+            so it did nothing at all. It is a refresh: the manager has been
+            looking at the screen for a few minutes while orders came in on the
+            floor, and needs the figures without going somewhere else.
+          */}
           <button
-            onClick={() => setActiveNav('Overview')}
+            onClick={onRefresh}
             className="flex items-center gap-2 rounded-md border border-white/[0.1] bg-white/[0.025] px-4 py-2.5 text-xs font-medium text-[#d0d0c9] hover:bg-white/[0.06] min-h-[44px]"
           >
-            <CalendarDays size={15} />
-            Today
+            <RefreshCw size={15} />
+            Refresh
           </button>
         </div>
       </div>
@@ -4833,7 +4841,7 @@ export default function Page() {
   const renderView = () => {
     switch (activeNav) {
       case 'Overview':
-        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} setShowSale={setShowSale} setActiveNav={setActiveNav} />
+        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} setShowSale={setShowSale} setActiveNav={setActiveNav} onRefresh={refreshDashboard} />
       case 'Point of Sale':
         return (
           <>
@@ -4844,23 +4852,6 @@ export default function Page() {
                 <p className="mt-2 text-sm text-[#878981]">Add products to the cart and send to a table</p>
               </div>
             </div>
-            <POSView
-              products={products}
-              categories={categories}
-              activeCategory={activeCategory}
-              query={query}
-              filteredProducts={filteredProducts}
-              cart={cart}
-              onCategoryChange={setActiveCategory}
-              onQueryChange={setQuery}
-              onAddToCart={addToCart}
-              onRemoveFromCart={removeFromCart}
-              cartTotal={cartTotal}
-              onCheckout={handleCheckout}
-              showSale={showSale}
-              setShowSale={setShowSale}
-              tables={dashboardData.tables}
-            />
           </>
         )
       case 'Orders':
@@ -4895,7 +4886,7 @@ export default function Page() {
       case 'Settings':
         return <SettingsView />
       default:
-        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} setShowSale={setShowSale} setActiveNav={setActiveNav} />
+        return <OverviewView data={dashboardData} onOrderClick={fetchOrderDetail} setShowSale={setShowSale} setActiveNav={setActiveNav} onRefresh={refreshDashboard} />
     }
   }
 
@@ -5090,6 +5081,30 @@ export default function Page() {
         {/* Staff-facing notifications, so an error never blocks the till
             with a browser alert. */}
         <NoticeList />
+
+        {/* The sale sheet lives at the top level so "New sale" works from any
+            screen. It was rendered inside the Point of Sale and Orders views
+            only, so the button on the Overview set the state but nothing was
+            mounted to show it — the press did nothing at all. */}
+        {showSale && (
+          <POSView
+            products={products}
+            categories={categories}
+            activeCategory={activeCategory}
+            query={query}
+            filteredProducts={filteredProducts}
+            cart={cart}
+            onCategoryChange={setActiveCategory}
+            onQueryChange={setQuery}
+            onAddToCart={addToCart}
+            onRemoveFromCart={removeFromCart}
+            cartTotal={cartTotal}
+            onCheckout={handleCheckout}
+            showSale={showSale}
+            setShowSale={setShowSale}
+            tables={dashboardData.tables}
+          />
+        )}
         <OrderDetailModal order={selectedOrder} onClose={closeOrderDetail} onRefresh={refreshDashboard} />
         <ShiftModal
           shift={shift}
