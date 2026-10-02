@@ -189,16 +189,37 @@ export async function pesapalRegisterIpn(
   return { ipnId: data.ipn_id, url: data.url ?? url }
 }
 
-/** List registered IPN URLs, so an existing registration can be reused. */
+/**
+ * List registered IPN URLs, so an existing registration can be reused.
+ *
+ * Two things about this endpoint are easy to get wrong, and both were:
+ * the path is under URLSetup alongside RegisterIPN rather than Notifications,
+ * and the response is a bare array of snake_case objects keyed `ipn_id`, not
+ * an object with a `results` array of camelCase fields.
+ */
 export async function pesapalListIpn(token: string): Promise<RegisterIpnResult[]> {
-  const res = await fetchWithTimeout(`${pesapalApiBase()}/Notifications/GetIPNList`, {
+  const res = await fetchWithTimeout(`${pesapalApiBase()}/URLSetup/GetIPNList`, {
     method: 'GET',
     headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
   })
 
   if (!res.ok) return []
-  const data = await readJson<{ results?: RegisterIpnResult[] }>(res, 'IPN list')
-  return data.results ?? []
+
+  const data = await readJson<unknown>(res, 'IPN list')
+
+  const entries = Array.isArray(data)
+    ? data
+    : ((data as { results?: unknown[] })?.results ?? [])
+
+  // Map to the camelCase shape the rest of the app uses. Reading `ipnId` off a
+  // snake_case response yields undefined, which then gets submitted as a
+  // missing notification_id and the order is rejected.
+  return (entries as Record<string, unknown>[])
+    .map((entry) => ({
+      ipnId: String(entry.ipn_id ?? entry.ipnId ?? ''),
+      url: String(entry.url ?? ''),
+    }))
+    .filter((entry) => entry.ipnId && entry.url)
 }
 
 /* ---------- order submission ---------- */

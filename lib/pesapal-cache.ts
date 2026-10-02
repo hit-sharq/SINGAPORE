@@ -64,6 +64,14 @@ export async function getNotificationId(
   }
 
   const registered = await pesapalRegisterIpn(token, ipnUrl, 'GET')
+
+  // A registration without an id would be submitted as a missing
+  // notification_id and the order would be rejected by PesaPal, so fail here
+  // with a clear reason instead of sending a doomed request.
+  if (!registered.ipnId) {
+    throw new Error('PesaPal accepted the IPN registration but returned no id')
+  }
+
   cachedIpn = { notificationId: registered.ipnId, url: ipnUrl }
   return registered.ipnId
 }

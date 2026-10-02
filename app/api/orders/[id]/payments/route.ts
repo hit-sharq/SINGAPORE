@@ -269,8 +269,31 @@ export async function POST(
         // API 3.0 authenticates with a short-lived bearer token rather than
         // sending the key and secret on every call, and requires the IPN URL to
         // be registered up front so the order can carry a notification_id.
-        const token = await getPesapalToken(consumerKey, consumerSecret)
-        const notificationId = await getNotificationId(token, notificationUrl)
+        //
+        // Each step is logged separately: when a payment fails at 2am the
+        // terminal is the only place that says which of the three calls broke,
+        // and a single generic "provider error" makes that impossible to tell.
+        let token: string
+        try {
+          token = await getPesapalToken(consumerKey, consumerSecret)
+        } catch (err) {
+          console.error(
+            `[payment ${payment.id}] step 1/3 authentication failed:`,
+            err instanceof PesapalError ? err.message : err
+          )
+          throw err
+        }
+
+        let notificationId: string
+        try {
+          notificationId = await getNotificationId(token, notificationUrl)
+        } catch (err) {
+          console.error(
+            `[payment ${payment.id}] step 2/3 IPN registration failed for ${notificationUrl}:`,
+            err instanceof PesapalError ? err.message : err
+          )
+          throw err
+        }
 
         const result = await pesapalSubmitOrder(
           {
