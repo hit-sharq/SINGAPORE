@@ -4402,6 +4402,16 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
                       )}
                     </div>
                   </div>
+                  {/*
+                    Cash and mobile money only.
+
+                    Card is not offered. There was never a card integration
+                    behind it — any method other than PesaPal used to be marked
+                    COMPLETED the moment it was recorded, so it settled an order
+                    without charging anything. It is gone from the till, and the
+                    API refuses the method, so it cannot be reached by a crafted
+                    request either.
+                  */}
                   <div className="flex gap-2">
                     <button
                       disabled={processing === 'CASH' || !hasOutstanding}
@@ -4409,26 +4419,6 @@ function OrderDetailModal({ order, onClose, onRefresh }: { order: OrderDetail | 
                       className="flex-1 rounded-md bg-[#d8a85b] py-2.5 text-xs font-semibold text-[#1b1914] transition hover:bg-[#e4b96d] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {processing === 'CASH' ? 'Processing...' : 'Cash'}
-                    </button>
-                    {/*
-                      Card is not available yet.
-
-                      There is no card integration in this system. Any method
-                      other than PesaPal used to be marked COMPLETED the moment
-                      it was recorded, so this button settled an order without
-                      charging anything — handing a customer a receipt for money
-                      that was never taken.
-
-                      It stays visible but disabled rather than disappearing, so
-                      the till looks the same for staff and the reason is on
-                      screen instead of the button mysteriously missing.
-                    */}
-                    <button
-                      disabled
-                      title="Card payments are not available yet"
-                      className="flex-1 cursor-not-allowed rounded-md border border-white/[0.06] bg-white/[0.015] py-2.5 text-xs font-semibold text-[#5c5e58]"
-                    >
-                      Card
                     </button>
                     <button
                       disabled={processing === 'PESAPAL' || !hasOutstanding}
